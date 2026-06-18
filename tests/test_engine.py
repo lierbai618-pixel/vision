@@ -6,8 +6,6 @@ from unittest import mock
 
 import pytest
 import torch
-
-from tests import MODEL, SOURCE, TASK_MODEL_DATA
 from ultralytics import YOLO
 from ultralytics.cfg import get_cfg
 from ultralytics.engine.exporter import Exporter
@@ -15,6 +13,8 @@ from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.models.yolo import classify, detect, obb, pose, segment, semantic
 from ultralytics.nn.tasks import load_checkpoint
 from ultralytics.utils import ASSETS, DEFAULT_CFG, IS_RASPBERRYPI, WEIGHTS_DIR
+
+from tests import MODEL, SOURCE, TASK_MODEL_DATA
 
 
 def test_func(*args, **kwargs):
