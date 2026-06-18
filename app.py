@@ -525,15 +525,22 @@ def main():
 # ==================== 手机摄像头实时检测 ====================
 
 def show_mobile_camera(model_option, conf_threshold):
-    """使用浏览器摄像头实时检测（支持手机）"""
-    st.markdown("### 📱 手机摄像头实时检测")
-    st.markdown("打开摄像头，实时进行 AI 检测")
+    """使用浏览器摄像头检测（支持手机）"""
+    st.markdown("### 📱 手机摄像头检测")
 
     # 检测选项
     c1, c2, c3 = st.columns(3)
     with c1: enable_object = st.checkbox("🎯 目标检测", True, key="mob_obj")
     with c2: enable_face = st.checkbox("👤 人脸识别", True, key="mob_face")
     with c3: enable_mask = st.checkbox("😷 口罩检测", False, key="mob_mask")
+
+    # 模式选择
+    cam_mode = st.radio("选择模式", ["📹 实时监测", "📸 拍照检测"], horizontal=True, key="mob_cam_mode")
+
+    if cam_mode == "📸 拍照检测":
+        # 拍照模式
+        show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_face, enable_mask)
+        return
 
     # 使用 streamlit-webrtc 实现实时视频流
     try:
