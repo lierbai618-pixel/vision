@@ -56,7 +56,7 @@ jobs:
         run: pytest tests/ -v --cov=src/ --cov-report=html
 
       - name: Upload coverage
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: htmlcov/
