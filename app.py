@@ -508,7 +508,7 @@ def main():
         model_option = st.selectbox("检测模型", [
             "yolov8m.pt", "yolov8l.pt", "yolov8x.pt", "yolov8s.pt", "yolov8n.pt"
         ], index=0, key="model_option", help="m/l 精度高，n/s 速度快")
-        conf_threshold = st.slider("置信度阈值", 0.0, 1.0, 0.35, 0.05, key="conf_threshold")
+        conf_threshold = st.slider("置信度阈值", 0.0, 1.0, 0.5, 0.05, key="conf_threshold")
 
     route = {
         "📹 实时监测": lambda: show_realtime_monitor(model_option, conf_threshold),
@@ -582,7 +582,7 @@ def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_f
             try:
                 from ultralytics import YOLO
                 det_model = YOLO(model_option)
-                results = det_model(img, conf=conf_threshold, iou=0.5, agnostic_nms=True, imgsz=640, verbose=False)
+                results = det_model(img, conf=conf_threshold, iou=0.5, agnostic_nms=True, imgsz=960, verbose=False)
                 if results[0].boxes is not None:
                     obj_count = len(results[0].boxes)
                     names = results[0].names
