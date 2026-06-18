@@ -32,17 +32,17 @@
 
 ## 🛠️ 技术栈
 
-| 技术 | 用途 |
-|------|------|
-| Python 3.8+ | 主要编程语言 |
-| PyTorch | 深度学习框架 |
-| YOLOv8 | 目标检测模型 |
-| MediaPipe | 人脸和手部检测 |
-| EasyOCR | 文字识别 |
-| OpenCV | 图像处理 |
-| Matplotlib | 数据可视化 |
-| Streamlit | Web界面 |
-| FastAPI | API服务 |
+| 技术        | 用途           |
+| ----------- | -------------- |
+| Python 3.8+ | 主要编程语言   |
+| PyTorch     | 深度学习框架   |
+| YOLOv8      | 目标检测模型   |
+| MediaPipe   | 人脸和手部检测 |
+| EasyOCR     | 文字识别       |
+| OpenCV      | 图像处理       |
+| Matplotlib  | 数据可视化     |
+| Streamlit   | Web界面        |
+| FastAPI     | API服务        |
 
 ## 📁 项目结构
 
@@ -111,7 +111,7 @@ cd yolov8-object-detection
 
 # 创建虚拟环境
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate # Windows: venv\Scripts\activate
 
 # 安装依赖
 pip install -r requirements.txt
@@ -120,6 +120,7 @@ pip install -r requirements.txt
 ### 使用示例
 
 #### 图片检测
+
 ```python
 from src.detector import ObjectDetector
 
@@ -128,18 +129,21 @@ results = detector.detect_image("data/samples/test.jpg")
 ```
 
 #### 视频检测
+
 ```python
 detector = ObjectDetector()
 detector.detect_video("input.mp4", "output.mp4")
 ```
 
 #### 摄像头实时检测
+
 ```python
 detector = ObjectDetector()
 detector.detect_camera(camera_id=0)
 ```
 
 #### 人脸识别
+
 ```python
 from src.face_detector import FaceDetector
 
@@ -155,6 +159,7 @@ detector.draw_faces("photo.jpg", "result.jpg")
 ```
 
 #### 车牌识别
+
 ```python
 from src.plate_recognizer import LicensePlateRecognizer
 
@@ -181,7 +186,7 @@ recognizer = GestureRecognizer()
 results = recognizer.recognize_gesture("hand.jpg")
 print(f"检测到 {results['hand_count']} 只手")
 
-for gesture in results['gestures']:
+for gesture in results["gestures"]:
     print(f"手势: {gesture['gesture']}")
 ```
 
@@ -202,11 +207,13 @@ python examples/realtime_all.py
 ```
 
 ### 启动Web界面
+
 ```bash
 streamlit run app.py
 ```
 
 ### 启动API服务
+
 ```bash
 uvicorn api:app --reload
 ```
@@ -230,7 +237,7 @@ docker-compose up -d
 from src.config import ConfigManager
 
 # 创建配置管理器
-manager = ConfigManager('config.yaml')
+manager = ConfigManager("config.yaml")
 
 # 加载配置
 config = manager.load()
@@ -240,8 +247,8 @@ model_path = config.model.detection_model
 api_port = config.api.port
 
 # 设置配置值
-manager.set('model.detection_model', 'yolov8s.pt')
-manager.set('api.port', 8001)
+manager.set("model.detection_model", "yolov8s.pt")
+manager.set("api.port", 8001)
 
 # 保存配置
 manager.save()
@@ -252,40 +259,40 @@ manager.save()
 <details>
 <summary>点击展开查看所有类别（80类）</summary>
 
-| 类别 | 类别 | 类别 | 类别 |
-|------|------|------|------|
-| person | bicycle | car | motorcycle |
-| airplane | bus | train | truck |
-| boat | traffic light | fire hydrant | stop sign |
-| parking meter | bench | bird | cat |
-| dog | horse | sheep | cow |
-| elephant | bear | zebra | giraffe |
-| backpack | umbrella | handbag | tie |
-| suitcase | frisbee | skis | snowboard |
-| sports ball | kite | baseball bat | baseball glove |
-| skateboard | surfboard | tennis racket | bottle |
-| wine glass | cup | fork | knife |
-| spoon | bowl | banana | apple |
-| sandwich | orange | broccoli | carrot |
-| hot dog | pizza | donut | cake |
-| chair | couch | potted plant | bed |
-| dining table | toilet | tv | laptop |
-| mouse | remote | keyboard | cell phone |
-| microwave | oven | toaster | sink |
-| refrigerator | book | clock | vase |
-| scissors | teddy bear | hair drier | toothbrush |
+| 类别          | 类别          | 类别          | 类别           |
+| ------------- | ------------- | ------------- | -------------- |
+| person        | bicycle       | car           | motorcycle     |
+| airplane      | bus           | train         | truck          |
+| boat          | traffic light | fire hydrant  | stop sign      |
+| parking meter | bench         | bird          | cat            |
+| dog           | horse         | sheep         | cow            |
+| elephant      | bear          | zebra         | giraffe        |
+| backpack      | umbrella      | handbag       | tie            |
+| suitcase      | frisbee       | skis          | snowboard      |
+| sports ball   | kite          | baseball bat  | baseball glove |
+| skateboard    | surfboard     | tennis racket | bottle         |
+| wine glass    | cup           | fork          | knife          |
+| spoon         | bowl          | banana        | apple          |
+| sandwich      | orange        | broccoli      | carrot         |
+| hot dog       | pizza         | donut         | cake           |
+| chair         | couch         | potted plant  | bed            |
+| dining table  | toilet        | tv            | laptop         |
+| mouse         | remote        | keyboard      | cell phone     |
+| microwave     | oven          | toaster       | sink           |
+| refrigerator  | book          | clock         | vase           |
+| scissors      | teddy bear    | hair drier    | toothbrush     |
 
 </details>
 
 ## 📈 性能指标
 
-| 模型 | mAP50 | mAP50-95 | 速度(FPS) |
-|------|-------|----------|-----------|
-| YOLOv8n | 52.5 | 37.3 | 80+ |
-| YOLOv8s | 61.8 | 45.0 | 60+ |
-| YOLOv8m | 67.2 | 50.2 | 45+ |
-| YOLOv8l | 71.8 | 53.9 | 35+ |
-| YOLOv8x | 74.9 | 55.8 | 25+ |
+| 模型    | mAP50 | mAP50-95 | 速度(FPS) |
+| ------- | ----- | -------- | --------- |
+| YOLOv8n | 52.5  | 37.3     | 80+       |
+| YOLOv8s | 61.8  | 45.0     | 60+       |
+| YOLOv8m | 67.2  | 50.2     | 45+       |
+| YOLOv8l | 71.8  | 53.9     | 35+       |
+| YOLOv8x | 74.9  | 55.8     | 25+       |
 
 ## 🤝 贡献指南
 
@@ -300,6 +307,7 @@ manager.save()
 ## 📝 更新日志
 
 ### v1.0.0 (2024-XX-XX)
+
 - 初始版本发布
 - 支持图片/视频/摄像头检测
 - 提供Streamlit Web界面
