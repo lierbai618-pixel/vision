@@ -1,0 +1,39 @@
+# YOLOv8目标检测系统 - 默认配置
+
+# 模型配置
+model:
+  path: 'yolov8s.pt'  # 模型路径
+  conf_threshold: 0.5  # 置信度阈值
+  iou_threshold: 0.45  # IOU阈值
+  device: ''  # 运算设备，''自动选择
+
+# 检测配置
+detection:
+  save_results: true  # 是否保存结果
+  show_results: false  # 是否显示结果
+  output_dir: 'results'  # 输出目录
+
+# 视频配置
+video:
+  fps: 30  # 帧率
+  codec: 'mp4v'  # 编码器
+
+# 摄像头配置
+camera:
+  id: 0  # 摄像头ID
+  width: 640  # 宽度
+  height: 480  # 高度
+
+# 训练配置
+train:
+  epochs: 100  # 训练轮数
+  batch_size: 16  # 批次大小
+  img_size: 640  # 图片尺寸
+  workers: 8  # 数据加载线程数
+  optimizer: 'auto'  # 优化器
+  learning_rate: 0.01  # 学习率
+
+# 日志配置
+logging:
+  level: 'INFO'  # 日志级别
+  file: 'logs/app.log'  # 日志文件

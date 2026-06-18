@@ -1,0 +1,18 @@
+# 自定义物品检测数据集
+# 针对小物品（橡皮、风扇、耳机等）优化
+
+path: D:\项目\yolov8-object-detection\data\custom_items
+train: images/train
+val: images/val
+
+names:
+  0: eraser
+  1: fan
+  2: headphones
+  3: pen
+  4: pencil
+  5: scissors
+  6: tape
+  7: ruler
+  8: calculator
+  9: stapler
