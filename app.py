@@ -522,6 +522,120 @@ def main():
     route[app_mode]()
 
 
+# ==================== 手机摄像头检测 ====================
+
+def show_mobile_camera(model_option, conf_threshold):
+    """使用浏览器摄像头（支持手机）"""
+    st.markdown("### 📱 手机摄像头检测")
+    st.markdown("点击拍照，自动进行 AI 检测")
+
+    # 检测选项
+    c1, c2, c3 = st.columns(3)
+    with c1: enable_object = st.checkbox("🎯 目标检测", True, key="mob_obj")
+    with c2: enable_face = st.checkbox("👤 人脸识别", True, key="mob_face")
+    with c3: enable_mask = st.checkbox("😷 口罩检测", False, key="mob_mask")
+
+    # 拍照按钮
+    camera_photo = st.camera_input("📸 点击拍照", key="camera_input")
+
+    if camera_photo is not None:
+        # 获取拍摄的图片
+        image = Image.open(camera_photo)
+        st.markdown("### 🔍 检测结果")
+
+        # 显示原图
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**原图**")
+            st.image(image, width='stretch')
+
+        # 转换为 OpenCV 格式
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+            image.save(tmp, format='JPEG')
+            tmp_path = tmp.name
+
+        img = cv2.imread(tmp_path)
+        os.unlink(tmp_path)
+
+        text_items = []
+        obj_count = 0
+        face_count = 0
+        mask_count = 0
+
+        # 目标检测
+        if enable_object:
+            try:
+                from ultralytics import YOLO
+                det_model = YOLO(model_option)
+                results = det_model(img, conf=conf_threshold, iou=0.5, agnostic_nms=True, imgsz=640, verbose=False)
+                if results[0].boxes is not None:
+                    obj_count = len(results[0].boxes)
+                    names = results[0].names
+                    for box in results[0].boxes:
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        c = float(box.conf[0])
+                        cls = int(box.cls[0])
+                        name = COCO_CN.get(names[cls], names[cls])
+                        # 人用绿色，其他用蓝色
+                        color = (0, 255, 0) if names[cls] == "person" else (255, 0, 0)
+                        cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
+                        text_items.append((f"{name} {c:.0%}", (x1, max(y1 - 18, 0)), 20, color))
+            except Exception as e:
+                st.warning(f"目标检测失败: {e}")
+
+        # 人脸识别
+        if enable_face:
+            try:
+                face_model = load_yolo_face_model()
+                f_res = face_model(img, conf=0.25, verbose=False)
+                if f_res[0].boxes is not None:
+                    face_count = len(f_res[0].boxes)
+                    for box in f_res[0].boxes:
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        c = float(box.conf[0])
+                        cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 0), 2)
+                        text_items.append((f"人脸 {c:.0%}", (x1, max(y1 - 18, 0)), 20, (255, 0, 0)))
+            except Exception as e:
+                st.warning(f"人脸识别失败: {e}")
+
+        # 口罩检测
+        if enable_mask:
+            try:
+                mask_model = load_mask_detector()
+                m_res = mask_model(img, conf=conf_threshold, verbose=False)
+                if m_res[0].boxes is not None:
+                    mask_count = len(m_res[0].boxes)
+                    for box in m_res[0].boxes:
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        c = float(box.conf[0])
+                        cls = int(box.cls[0])
+                        info = MASK_CLASSES.get(cls, {"name": "?", "color": (128, 128, 128)})
+                        cv2.rectangle(img, (x1, y1), (x2, y2), info['color'], 2)
+                        text_items.append((f"{info['name']}:{c:.0%}", (x1, max(y1 - 18, 0)), 20, info['color']))
+            except Exception as e:
+                st.warning(f"口罩检测失败: {e}")
+
+        # 绘制文字
+        if text_items:
+            img = batch_draw_texts(img, text_items)
+
+        # 显示结果
+        result_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        with c2:
+            st.markdown("**检测结果**")
+            st.image(result_img, width='stretch')
+
+        # 统计信息
+        c1, c2, c3 = st.columns(3)
+        with c1: st.metric("🎯 目标", obj_count)
+        with c2: st.metric("👤 人脸", face_count)
+        with c3: st.metric("😷 口罩", mask_count)
+
+    else:
+        st.info("👆 点击上方按钮打开摄像头拍照")
+
+
 # ==================== 实时监测（st.image 直接渲染） ====================
 
 def show_realtime_monitor(model_option, conf_threshold):
@@ -529,6 +643,22 @@ def show_realtime_monitor(model_option, conf_threshold):
     st.markdown("摄像头实时检测 · 截图 · 告警")
 
     srv = st.session_state['_stream_server']
+
+    # 检测环境：本地还是云端
+    import platform
+    is_local = platform.system() != "Linux" or "streamlit" not in platform.node().lower()
+
+    # 摄像头模式选择
+    if is_local:
+        camera_mode = st.radio("摄像头模式", ["🖥️ 本地摄像头", "📱 手机摄像头"], horizontal=True, key="cam_mode")
+    else:
+        camera_mode = "📱 手机摄像头"
+        st.info("☁️ 云端环境，使用手机浏览器摄像头")
+
+    if camera_mode == "📱 手机摄像头":
+        # 手机摄像头模式
+        show_mobile_camera(model_option, conf_threshold)
+        return
 
     with st.expander("⚙️ 监测配置", expanded=not srv._running):
         c1, c2, c3, c4 = st.columns(4)
