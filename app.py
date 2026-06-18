@@ -534,8 +534,106 @@ def show_mobile_camera(model_option, conf_threshold):
     with c2: enable_face = st.checkbox("👤 人脸识别", True, key="mob_face")
     with c3: enable_mask = st.checkbox("😷 口罩检测", False, key="mob_mask")
 
-    # 拍照模式
-    show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_face, enable_mask)
+    # 模式选择
+    cam_mode = st.radio("选择模式", ["📹 实时视频流", "📸 拍照检测"], horizontal=True, key="mob_cam_mode")
+
+    if cam_mode == "📸 拍照检测":
+        show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_face, enable_mask)
+        return
+
+    # 实时视频流模式
+    try:
+        from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
+        import av
+        import threading
+
+        # 加载模型（使用缓存）
+        @st.cache_resource
+        def load_mob_models(model_opt):
+            det_m = None
+            face_m = None
+            try:
+                from ultralytics import YOLO
+                det_m = YOLO(model_opt)
+            except Exception:
+                pass
+            try:
+                face_m = load_yolo_face_model()
+            except Exception:
+                pass
+            return det_m, face_m
+
+        det_model, face_model = load_mob_models(model_option)
+
+        # 模型锁
+        model_lock = threading.Lock()
+
+        def video_frame_callback(frame):
+            img = frame.to_ndarray(format="bgr24")
+            text_items = []
+
+            with model_lock:
+                # 目标检测
+                if enable_object and det_model is not None:
+                    try:
+                        results = det_model(img, conf=conf_threshold, iou=0.5, agnostic_nms=True, imgsz=640, verbose=False)
+                        if results[0].boxes is not None:
+                            names = results[0].names
+                            for box in results[0].boxes:
+                                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                                c = float(box.conf[0])
+                                cls = int(box.cls[0])
+                                name = COCO_CN.get(names[cls], names[cls])
+                                color = (0, 255, 0) if names[cls] == "person" else (255, 0, 0)
+                                cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
+                                text_items.append((f"{name} {c:.0%}", (x1, max(y1 - 18, 0)), 16, color))
+                    except Exception:
+                        pass
+
+                # 人脸识别
+                if enable_face and face_model is not None:
+                    try:
+                        f_res = face_model(img, conf=0.25, imgsz=640, verbose=False)
+                        if f_res[0].boxes is not None:
+                            for box in f_res[0].boxes:
+                                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                                c = float(box.conf[0])
+                                cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 0), 2)
+                                text_items.append((f"人脸 {c:.0%}", (x1, max(y1 - 18, 0)), 16, (255, 0, 0)))
+                    except Exception:
+                        pass
+
+            # 绘制中文文字
+            if text_items:
+                img = batch_draw_texts(img, text_items)
+
+            return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+        RTC_CONFIGURATION = RTCConfiguration(
+            iceServers=[{"urls": ["stun:stun.l.google.com:19302"]}]
+        )
+
+        webrtc_ctx = webrtc_streamer(
+            key="mobile-realtime",
+            mode=WebRtcMode.SENDRECV,
+            rtc_configuration=RTC_CONFIGURATION,
+            video_frame_callback=video_frame_callback,
+            media_stream_constraints={"video": True, "audio": False},
+            async_processing=False,
+        )
+
+        if webrtc_ctx.state.playing:
+            st.success("📹 实时检测已启动！")
+        else:
+            st.info("👆 点击 Play 按钮启动摄像头")
+
+    except ImportError:
+        st.warning("实时视频流组件未安装，使用拍照模式")
+        show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_face, enable_mask)
+    except Exception as e:
+        st.error(f"实时视频流启动失败: {e}")
+        st.info("请使用拍照模式")
+        show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_face, enable_mask)
 
 
 def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_face, enable_mask):
