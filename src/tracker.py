@@ -1,18 +1,18 @@
 """
-目标追踪模块
+目标追踪模块.
 
 使用 YOLOv8 内置追踪器进行多目标追踪
 """
 
-import cv2
-import numpy as np
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Dict, List, Optional
+
+import cv2
 
 
 class ObjectTracker:
-    """
-    目标追踪器
+    """目标追踪器.
 
     使用 YOLOv8 内置追踪器（如 BoT-SORT、ByteTrack）进行多目标追踪
 
@@ -22,13 +22,9 @@ class ObjectTracker:
     """
 
     def __init__(
-        self,
-        model_path: str = 'yolov8n.pt',
-        tracker_type: str = 'bytetrack.yaml',
-        conf_threshold: float = 0.5
+        self, model_path: str = "yolov8n.pt", tracker_type: str = "bytetrack.yaml", conf_threshold: float = 0.5
     ):
-        """
-        初始化目标追踪器
+        """初始化目标追踪器.
 
         Args:
             model_path: 模型路径
@@ -36,19 +32,15 @@ class ObjectTracker:
             conf_threshold: 置信度阈值
         """
         from ultralytics import YOLO
+
         self.model = YOLO(model_path)
         self.tracker_type = tracker_type
         self.conf_threshold = conf_threshold
 
     def track_video(
-        self,
-        video_path: str,
-        output_path: Optional[str] = None,
-        show_result: bool = False,
-        save_result: bool = True
-    ) -> Dict:
-        """
-        追踪视频中的目标
+        self, video_path: str, output_path: str | None = None, show_result: bool = False, save_result: bool = True
+    ) -> dict:
+        """追踪视频中的目标.
 
         Args:
             video_path: 视频路径
@@ -71,16 +63,10 @@ class ObjectTracker:
         out = None
         if save_result and output_path:
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
             out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
-        stats = {
-            'total_frames': total_frames,
-            'fps': fps,
-            'tracked_ids': set(),
-            'frame_tracks': [],
-            'total_tracks': 0
-        }
+        stats = {"total_frames": total_frames, "fps": fps, "tracked_ids": set(), "frame_tracks": [], "total_tracks": 0}
 
         frame_count = 0
         while cap.isOpened():
@@ -90,11 +76,7 @@ class ObjectTracker:
 
             # 使用 YOLOv8 追踪
             results = self.model.track(
-                frame,
-                conf=self.conf_threshold,
-                tracker=self.tracker_type,
-                persist=True,
-                verbose=False
+                frame, conf=self.conf_threshold, tracker=self.tracker_type, persist=True, verbose=False
             )
 
             # 收集追踪信息
@@ -102,10 +84,10 @@ class ObjectTracker:
             if results[0].boxes is not None and results[0].boxes.id is not None:
                 track_ids = results[0].boxes.id.cpu().numpy().astype(int)
                 for tid in track_ids:
-                    stats['tracked_ids'].add(int(tid))
+                    stats["tracked_ids"].add(int(tid))
                     frame_ids.append(int(tid))
 
-            stats['frame_tracks'].append(len(frame_ids))
+            stats["frame_tracks"].append(len(frame_ids))
 
             # 绘制结果
             annotated = results[0].plot()
@@ -115,10 +97,10 @@ class ObjectTracker:
 
             if show_result:
                 try:
-                    cv2.imshow('Tracking', annotated)
+                    cv2.imshow("Tracking", annotated)
                 except Exception:
                     pass
-                if cv2.waitKey(1) & 0xFF == ord('q'):
+                if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
 
             frame_count += 1
@@ -133,21 +115,15 @@ class ObjectTracker:
         except Exception:
             pass
 
-        stats['total_tracks'] = len(stats['tracked_ids'])
-        stats['tracked_ids'] = list(stats['tracked_ids'])
-        stats['processed_frames'] = frame_count
+        stats["total_tracks"] = len(stats["tracked_ids"])
+        stats["tracked_ids"] = list(stats["tracked_ids"])
+        stats["processed_frames"] = frame_count
 
         print(f"追踪完成: {stats['total_tracks']} 个目标, {frame_count} 帧")
         return stats
 
-    def track_camera(
-        self,
-        camera_id: int = 0,
-        output_path: Optional[str] = None,
-        show_result: bool = True
-    ) -> None:
-        """
-        摄像头实时追踪
+    def track_camera(self, camera_id: int = 0, output_path: str | None = None, show_result: bool = True) -> None:
+        """摄像头实时追踪.
 
         Args:
             camera_id: 摄像头 ID
@@ -166,21 +142,17 @@ class ObjectTracker:
                 break
 
             results = self.model.track(
-                frame,
-                conf=self.conf_threshold,
-                tracker=self.tracker_type,
-                persist=True,
-                verbose=False
+                frame, conf=self.conf_threshold, tracker=self.tracker_type, persist=True, verbose=False
             )
 
             annotated = results[0].plot()
 
             if show_result:
                 try:
-                    cv2.imshow('Camera Tracking', annotated)
+                    cv2.imshow("Camera Tracking", annotated)
                 except Exception:
                     pass
-                if cv2.waitKey(1) & 0xFF == ord('q'):
+                if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
 
         cap.release()
@@ -191,7 +163,7 @@ class ObjectTracker:
         print("摄像头追踪已结束")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # 测试代码
     print("目标追踪器测试")
     tracker = ObjectTracker()
