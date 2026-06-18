@@ -10,9 +10,10 @@ import pytest
 @pytest.fixture(scope="session")
 def solution_assets():
     """Return cached solution asset paths by name."""
-    from tests import SOLUTION_ASSETS
     from ultralytics.utils import ASSETS_URL, WEIGHTS_DIR
     from ultralytics.utils.downloads import safe_download
+
+    from tests import SOLUTION_ASSETS
 
     cache_dir = WEIGHTS_DIR / "solution_assets"
     cache_dir.mkdir(parents=True, exist_ok=True)
