@@ -154,6 +154,9 @@ wandb/
 weights/
 *.weights
 *.pt
+!models/custom_items.pt
+!models/yolov8n-face.pt
+!models/mask_detector.pt
 *.ts
 *.pb
 *.onnx

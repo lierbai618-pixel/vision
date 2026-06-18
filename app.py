@@ -172,7 +172,11 @@ class StreamServer:
                             x1, y1, x2, y2 = map(int, box.xyxy[0])
                             c = float(box.conf[0])
                             cls = int(box.cls[0])
-                            name = COCO_CN.get(names[cls], names[cls])
+                            # 判断是自定义模型还是通用模型
+                            if "custom" in model_option:
+                                name = CUSTOM_ITEMS_CN.get(names[cls], names[cls])
+                            else:
+                                name = COCO_CN.get(names[cls], names[cls])
                             # 人用绿色，其他目标用蓝色
                             if names[cls] == "person":
                                 color = (0, 255, 0)
@@ -397,6 +401,26 @@ def cn_name(en_name: str) -> str:
     return COCO_CN.get(en_name, en_name)
 
 
+# 自定义物品类别中文映射
+CUSTOM_ITEMS_CN = {
+    "eraser": "橡皮",
+    "fan": "风扇",
+    "headphones": "耳机",
+    "pen": "笔",
+    "pencil": "铅笔",
+    "scissors": "剪刀",
+    "tape": "胶带",
+    "ruler": "尺子",
+    "calculator": "计算器",
+    "stapler": "订书机",
+}
+
+
+def custom_cn_name(en_name: str) -> str:
+    """自定义类别名转中文"""
+    return CUSTOM_ITEMS_CN.get(en_name, en_name)
+
+
 # ==================== 全局状态初始化 ====================
 
 def init_session_state():
@@ -506,8 +530,8 @@ def main():
         st.markdown("---")
         st.markdown("## ⚙️ 全局设置")
         model_option = st.selectbox("检测模型", [
-            "yolov8m.pt", "yolov8l.pt", "yolov8x.pt", "yolov8s.pt", "yolov8n.pt"
-        ], index=0, key="model_option", help="m/l 精度高，n/s 速度快")
+            "models/custom_items.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt", "yolov8s.pt", "yolov8n.pt"
+        ], index=0, key="model_option", help="custom_items.pt 是你训练的专用模型，精度最高")
         conf_threshold = st.slider("置信度阈值", 0.0, 1.0, 0.5, 0.05, key="conf_threshold")
 
     route = {
