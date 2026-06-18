@@ -610,7 +610,13 @@ def show_mobile_camera(model_option, conf_threshold):
             return av.VideoFrame.from_ndarray(img, format="bgr24")
 
         RTC_CONFIGURATION = RTCConfiguration(
-            iceServers=[{"urls": ["stun:stun.l.google.com:19302"]}]
+            iceServers=[
+                {"urls": ["stun:stun.l.google.com:19302"]},
+                {"urls": ["stun:stun1.l.google.com:19302"]},
+                {"urls": ["stun:stun2.l.google.com:19302"]},
+                {"urls": ["stun:stun3.l.google.com:19302"]},
+                {"urls": ["stun:stun4.l.google.com:19302"]},
+            ]
         )
 
         webrtc_ctx = webrtc_streamer(
