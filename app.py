@@ -522,12 +522,12 @@ def main():
     route[app_mode]()
 
 
-# ==================== 手机摄像头检测 ====================
+# ==================== 手机摄像头实时检测 ====================
 
 def show_mobile_camera(model_option, conf_threshold):
-    """使用浏览器摄像头（支持手机）"""
-    st.markdown("### 📱 手机摄像头检测")
-    st.markdown("点击拍照，自动进行 AI 检测")
+    """使用浏览器摄像头实时检测（支持手机）"""
+    st.markdown("### 📱 手机摄像头实时检测")
+    st.markdown("打开摄像头，实时进行 AI 检测")
 
     # 检测选项
     c1, c2, c3 = st.columns(3)
@@ -535,21 +535,130 @@ def show_mobile_camera(model_option, conf_threshold):
     with c2: enable_face = st.checkbox("👤 人脸识别", True, key="mob_face")
     with c3: enable_mask = st.checkbox("😷 口罩检测", False, key="mob_mask")
 
-    # 拍照按钮
+    # 使用 streamlit-webrtc 实现实时视频流
+    try:
+        from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
+        import av
+
+        # 加载模型
+        det_model = None
+        face_model = None
+        mask_model = None
+
+        if enable_object:
+            try:
+                from ultralytics import YOLO
+                det_model = YOLO(model_option)
+            except Exception as e:
+                st.warning(f"目标检测模型加载失败: {e}")
+
+        if enable_face:
+            try:
+                face_model = load_yolo_face_model()
+            except Exception as e:
+                st.warning(f"人脸检测模型加载失败: {e}")
+
+        if enable_mask:
+            try:
+                mask_model = load_mask_detector()
+            except Exception as e:
+                st.warning(f"口罩检测模型加载失败: {e}")
+
+        # 视频帧处理回调
+        def video_frame_callback(frame):
+            img = frame.to_ndarray(format="bgr24")
+            text_items = []
+
+            # 目标检测
+            if enable_object and det_model is not None:
+                try:
+                    results = det_model(img, conf=conf_threshold, iou=0.5, agnostic_nms=True, imgsz=640, verbose=False)
+                    if results[0].boxes is not None:
+                        names = results[0].names
+                        for box in results[0].boxes:
+                            x1, y1, x2, y2 = map(int, box.xyxy[0])
+                            c = float(box.conf[0])
+                            cls = int(box.cls[0])
+                            name = COCO_CN.get(names[cls], names[cls])
+                            color = (0, 255, 0) if names[cls] == "person" else (255, 0, 0)
+                            cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
+                            text_items.append((f"{name} {c:.0%}", (x1, max(y1 - 18, 0)), 16, color))
+                except Exception:
+                    pass
+
+            # 人脸识别
+            if enable_face and face_model is not None:
+                try:
+                    f_res = face_model(img, conf=0.25, imgsz=640, verbose=False)
+                    if f_res[0].boxes is not None:
+                        for box in f_res[0].boxes:
+                            x1, y1, x2, y2 = map(int, box.xyxy[0])
+                            c = float(box.conf[0])
+                            cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 0), 2)
+                            text_items.append((f"人脸 {c:.0%}", (x1, max(y1 - 18, 0)), 16, (255, 0, 0)))
+                except Exception:
+                    pass
+
+            # 口罩检测
+            if enable_mask and mask_model is not None:
+                try:
+                    m_res = mask_model(img, conf=conf_threshold, iou=0.5, agnostic_nms=True, imgsz=640, verbose=False)
+                    if m_res[0].boxes is not None:
+                        for box in m_res[0].boxes:
+                            x1, y1, x2, y2 = map(int, box.xyxy[0])
+                            c = float(box.conf[0])
+                            cls = int(box.cls[0])
+                            info = MASK_CLASSES.get(cls, {"name": "?", "color": (128, 128, 128)})
+                            cv2.rectangle(img, (x1, y1), (x2, y2), info['color'], 2)
+                            text_items.append((f"{info['name']}:{c:.0%}", (x1, max(y1 - 18, 0)), 16, info['color']))
+                except Exception:
+                    pass
+
+            # 绘制中文文字
+            if text_items:
+                img = batch_draw_texts(img, text_items)
+
+            return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+        # WebRTC 配置
+        RTC_CONFIGURATION = RTCConfiguration(
+            iceServers=[{"urls": ["stun:stun.l.google.com:19302"]}]
+        )
+
+        # 启动 WebRTC 流
+        webrtc_ctx = webrtc_streamer(
+            key="mobile-camera",
+            mode=WebRtcMode.SENDRECV,
+            rtc_configuration=RTC_CONFIGURATION,
+            video_frame_callback=video_frame_callback,
+            media_stream_constraints={"video": True, "audio": False},
+            async_processing=True,
+        )
+
+        if webrtc_ctx.state.playing:
+            st.success("📹 摄像头已启动，实时检测中...")
+        else:
+            st.info("👆 点击上方 Play 按钮启动摄像头")
+
+    except ImportError:
+        # 如果 streamlit-webrtc 不可用，回退到拍照模式
+        st.warning("实时视频流不可用，使用拍照模式")
+        show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_face, enable_mask)
+
+
+def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_face, enable_mask):
+    """拍照模式（备用）"""
     camera_photo = st.camera_input("📸 点击拍照", key="camera_input")
 
     if camera_photo is not None:
-        # 获取拍摄的图片
         image = Image.open(camera_photo)
         st.markdown("### 🔍 检测结果")
 
-        # 显示原图
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("**原图**")
             st.image(image, width='stretch')
 
-        # 转换为 OpenCV 格式
         import tempfile
         with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
             image.save(tmp, format='JPEG')
@@ -563,7 +672,6 @@ def show_mobile_camera(model_option, conf_threshold):
         face_count = 0
         mask_count = 0
 
-        # 目标检测
         if enable_object:
             try:
                 from ultralytics import YOLO
@@ -577,14 +685,12 @@ def show_mobile_camera(model_option, conf_threshold):
                         c = float(box.conf[0])
                         cls = int(box.cls[0])
                         name = COCO_CN.get(names[cls], names[cls])
-                        # 人用绿色，其他用蓝色
                         color = (0, 255, 0) if names[cls] == "person" else (255, 0, 0)
                         cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
                         text_items.append((f"{name} {c:.0%}", (x1, max(y1 - 18, 0)), 20, color))
             except Exception as e:
                 st.warning(f"目标检测失败: {e}")
 
-        # 人脸识别
         if enable_face:
             try:
                 face_model = load_yolo_face_model()
@@ -599,7 +705,6 @@ def show_mobile_camera(model_option, conf_threshold):
             except Exception as e:
                 st.warning(f"人脸识别失败: {e}")
 
-        # 口罩检测
         if enable_mask:
             try:
                 mask_model = load_mask_detector()
@@ -616,24 +721,18 @@ def show_mobile_camera(model_option, conf_threshold):
             except Exception as e:
                 st.warning(f"口罩检测失败: {e}")
 
-        # 绘制文字
         if text_items:
             img = batch_draw_texts(img, text_items)
 
-        # 显示结果
         result_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         with c2:
             st.markdown("**检测结果**")
             st.image(result_img, width='stretch')
 
-        # 统计信息
         c1, c2, c3 = st.columns(3)
         with c1: st.metric("🎯 目标", obj_count)
         with c2: st.metric("👤 人脸", face_count)
         with c3: st.metric("😷 口罩", mask_count)
-
-    else:
-        st.info("👆 点击上方按钮打开摄像头拍照")
 
 
 # ==================== 实时监测（st.image 直接渲染） ====================
