@@ -14,7 +14,7 @@ mediapipe>=0.10.0
 
 # 数据处理
 numpy>=1.19.0
-pandas>=1.1.0
+pandas>=2.3.3
 
 # 可视化
 matplotlib>=3.3.0
