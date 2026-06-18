@@ -22,7 +22,6 @@ seaborn>=0.11.0
 
 # Web界面
 streamlit>=1.0.0
-streamlit-webrtc>=0.47.0
 
 # API服务
 fastapi>=0.68.0
