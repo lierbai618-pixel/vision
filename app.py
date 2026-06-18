@@ -534,122 +534,31 @@ def show_mobile_camera(model_option, conf_threshold):
     with c2: enable_face = st.checkbox("👤 人脸识别", True, key="mob_face")
     with c3: enable_mask = st.checkbox("😷 口罩检测", False, key="mob_mask")
 
-    # 模式选择
-    cam_mode = st.radio("选择模式", ["📹 实时视频流", "📸 拍照检测"], horizontal=True, key="mob_cam_mode")
+    # 摄像头选择
+    camera_facing = st.radio("📷 摄像头", ["前置摄像头", "后置摄像头"], horizontal=True, key="cam_facing")
 
-    if cam_mode == "📸 拍照检测":
-        show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_face, enable_mask)
-        return
-
-    # 实时视频流模式
-    try:
-        from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
-        import av
-        import threading
-
-        # 加载模型（使用缓存）
-        @st.cache_resource
-        def load_mob_models(model_opt):
-            det_m = None
-            face_m = None
-            try:
-                from ultralytics import YOLO
-                det_m = YOLO(model_opt)
-            except Exception:
-                pass
-            try:
-                face_m = load_yolo_face_model()
-            except Exception:
-                pass
-            return det_m, face_m
-
-        det_model, face_model = load_mob_models(model_option)
-
-        # 模型锁
-        model_lock = threading.Lock()
-
-        def video_frame_callback(frame):
-            img = frame.to_ndarray(format="bgr24")
-            text_items = []
-
-            with model_lock:
-                # 目标检测
-                if enable_object and det_model is not None:
-                    try:
-                        results = det_model(img, conf=conf_threshold, iou=0.5, agnostic_nms=True, imgsz=640, verbose=False)
-                        if results[0].boxes is not None:
-                            names = results[0].names
-                            for box in results[0].boxes:
-                                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                                c = float(box.conf[0])
-                                cls = int(box.cls[0])
-                                name = COCO_CN.get(names[cls], names[cls])
-                                color = (0, 255, 0) if names[cls] == "person" else (255, 0, 0)
-                                cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
-                                text_items.append((f"{name} {c:.0%}", (x1, max(y1 - 18, 0)), 16, color))
-                    except Exception:
-                        pass
-
-                # 人脸识别
-                if enable_face and face_model is not None:
-                    try:
-                        f_res = face_model(img, conf=0.25, imgsz=640, verbose=False)
-                        if f_res[0].boxes is not None:
-                            for box in f_res[0].boxes:
-                                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                                c = float(box.conf[0])
-                                cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 0), 2)
-                                text_items.append((f"人脸 {c:.0%}", (x1, max(y1 - 18, 0)), 16, (255, 0, 0)))
-                    except Exception:
-                        pass
-
-            # 绘制中文文字
-            if text_items:
-                img = batch_draw_texts(img, text_items)
-
-            return av.VideoFrame.from_ndarray(img, format="bgr24")
-
-        RTC_CONFIGURATION = RTCConfiguration(
-            iceServers=[
-                {"urls": ["stun:stun.l.google.com:19302"]},
-                {"urls": ["stun:stun1.l.google.com:19302"]},
-                {"urls": ["stun:stun2.l.google.com:19302"]},
-                {"urls": ["stun:stun3.l.google.com:19302"]},
-                {"urls": ["stun:stun4.l.google.com:19302"]},
-                {"urls": ["stun:stun.nextcloud.com:443"]},
-                {"urls": ["stun:stun.sipgate.net"]},
-                {"urls": ["stun:stun.schlund.de"]},
-            ]
-        )
-
-        webrtc_ctx = webrtc_streamer(
-            key="mobile-realtime",
-            mode=WebRtcMode.SENDRECV,
-            rtc_configuration=RTC_CONFIGURATION,
-            video_frame_callback=video_frame_callback,
-            media_stream_constraints={"video": True, "audio": False},
-            async_processing=False,
-        )
-
-        if webrtc_ctx.state.playing:
-            st.success("📹 实时检测已启动！")
-        else:
-            st.info("👆 点击 Play 按钮启动摄像头")
-
-    except ImportError:
-        st.warning("实时视频流组件未安装，使用拍照模式")
-        show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_face, enable_mask)
-    except Exception as e:
-        st.error(f"实时视频流启动失败: {e}")
-        st.info("请使用拍照模式")
-        show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_face, enable_mask)
+    # 使用连续拍照模式
+    show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_face, enable_mask)
 
 
 def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_face, enable_mask):
-    """拍照模式（备用）"""
+    """拍照模式（支持连续拍照）"""
+
+    # 初始化 session state
+    if 'detection_results' not in st.session_state:
+        st.session_state['detection_results'] = None
+    if 'detection_count' not in st.session_state:
+        st.session_state['detection_count'] = 0
+
+    # 拍照区域
     camera_photo = st.camera_input("📸 点击拍照", key="camera_input")
 
     if camera_photo is not None:
+        # 清除旧结果，释放内存
+        if st.session_state['detection_results'] is not None:
+            st.session_state['detection_results'] = None
+
+        # 处理新照片
         image = Image.open(camera_photo)
         st.markdown("### 🔍 检测结果")
 
@@ -658,19 +567,17 @@ def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_f
             st.markdown("**原图**")
             st.image(image, width='stretch')
 
-        import tempfile
-        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
-            image.save(tmp, format='JPEG')
-            tmp_path = tmp.name
-
-        img = cv2.imread(tmp_path)
-        os.unlink(tmp_path)
+        # 转换为 OpenCV 格式（不保存到磁盘）
+        import io
+        img_array = np.array(image)
+        img = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
 
         text_items = []
         obj_count = 0
         face_count = 0
         mask_count = 0
 
+        # 目标检测
         if enable_object:
             try:
                 from ultralytics import YOLO
@@ -690,6 +597,7 @@ def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_f
             except Exception as e:
                 st.warning(f"目标检测失败: {e}")
 
+        # 人脸识别
         if enable_face:
             try:
                 face_model = load_yolo_face_model()
@@ -704,6 +612,7 @@ def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_f
             except Exception as e:
                 st.warning(f"人脸识别失败: {e}")
 
+        # 口罩检测
         if enable_mask:
             try:
                 mask_model = load_mask_detector()
@@ -720,18 +629,62 @@ def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_f
             except Exception as e:
                 st.warning(f"口罩检测失败: {e}")
 
+        # 绘制中文文字
         if text_items:
             img = batch_draw_texts(img, text_items)
 
+        # 显示结果
         result_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         with c2:
             st.markdown("**检测结果**")
             st.image(result_img, width='stretch')
 
+        # 统计信息
         c1, c2, c3 = st.columns(3)
         with c1: st.metric("🎯 目标", obj_count)
         with c2: st.metric("👤 人脸", face_count)
         with c3: st.metric("😷 口罩", mask_count)
+
+        # 更新检测计数
+        st.session_state['detection_count'] += 1
+
+        # 操作按钮
+        st.markdown("---")
+        c1, c2, c3 = st.columns(3)
+
+        with c1:
+            # 下载检测结果
+            result_pil = Image.fromarray(result_img)
+            buf = io.BytesIO()
+            result_pil.save(buf, format='JPEG')
+            st.download_button(
+                label="💾 下载结果",
+                data=buf.getvalue(),
+                file_name=f"detection_{st.session_state['detection_count']}.jpg",
+                mime="image/jpeg",
+                key=f"download_{st.session_state['detection_count']}"
+            )
+
+        with c2:
+            # 清除结果
+            if st.button("🗑️ 清除结果", key="clear_result"):
+                st.session_state['detection_results'] = None
+                st.rerun()
+
+        with c3:
+            # 继续拍照提示
+            st.info("📸 点击上方继续拍照")
+
+        # 存储提示
+        st.caption(f"📊 已检测 {st.session_state['detection_count']} 次 | 结果仅在内存中，不保存到服务器")
+
+    else:
+        # 未拍照时显示提示
+        st.info("👆 点击上方按钮打开摄像头拍照")
+
+        # 显示历史统计
+        if st.session_state['detection_count'] > 0:
+            st.markdown(f"📊 已检测 {st.session_state['detection_count']} 次")
 
 
 # ==================== 实时监测（st.image 直接渲染） ====================
