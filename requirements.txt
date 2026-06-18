@@ -48,4 +48,4 @@ isort>=5.9.0
 
 # 文档
 mkdocs>=1.2.0
-mkdocs-material>=7.0.0
+mkdocs-material>=9.7.6
