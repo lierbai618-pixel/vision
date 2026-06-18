@@ -1,5 +1,5 @@
 """
-示例图片检测
+示例图片检测.
 
 检测下载的示例图片
 """
@@ -15,18 +15,13 @@ from src.detector import ObjectDetector
 
 
 def main():
-    """检测示例图片"""
-
+    """检测示例图片."""
     # 创建检测器
-    detector = ObjectDetector(
-        model_path='yolov8n.pt',
-        conf_threshold=0.5,
-        iou_threshold=0.45
-    )
+    detector = ObjectDetector(model_path="yolov8n.pt", conf_threshold=0.5, iou_threshold=0.45)
 
     # 获取示例图片
-    sample_dir = Path('data/samples')
-    images = list(sample_dir.glob('*.jpg'))
+    sample_dir = Path("data/samples")
+    images = list(sample_dir.glob("*.jpg"))
 
     if not images:
         print("没有找到示例图片，请先运行下载脚本")
@@ -39,12 +34,7 @@ def main():
         print(f"检测: {image_path.name}")
         print("-" * 40)
 
-        results = detector.detect_image(
-            str(image_path),
-            save_result=True,
-            show_result=False,
-            output_dir='results'
-        )
+        results = detector.detect_image(str(image_path), save_result=True, show_result=False, output_dir="results")
 
         print(f"  检测到 {results['count']} 个物体")
         print(f"  类别: {results['class_names']}")
@@ -54,5 +44,5 @@ def main():
     print("检测完成! 结果保存在 results/ 目录")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
