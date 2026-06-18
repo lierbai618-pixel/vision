@@ -1,0 +1,751 @@
+﻿"""
+智能视觉系统 - 统一版
+
+集成目标检测、人脸识别、手势识别、口罩检测、实时监测、批量处理的完整智能分析平台
+"""
+
+import streamlit as st
+import cv2
+import numpy as np
+from PIL import Image
+from pathlib import Path
+import tempfile
+import os
+import time
+from datetime import datetime, timedelta
+
+
+# ==================== 页面配置 ====================
+
+st.set_page_config(
+    page_title="智能视觉系统",
+    page_icon="👁️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+st.markdown("""
+<style>
+.main-header {
+    font-size: 2.5rem; font-weight: bold;
+    background: linear-gradient(90deg, #1E88E5, #FF4B4B);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    text-align: center; margin-bottom: 0.5rem;
+}
+.sub-header { font-size: 1.1rem; color: #888; text-align: center; margin-bottom: 1.5rem; }
+</style>
+""", unsafe_allow_html=True)
+
+
+# ==================== 安全路径（MediaPipe不支持中文路径） ====================
+
+SAFE_MODEL_DIR = Path("C:/temp/models")
+SAFE_MODEL_DIR.mkdir(parents=True, exist_ok=True)
+
+# MediaPipe 段错误检测（在子进程中测试，防止崩溃主进程）
+import subprocess
+import sys as _sys
+
+def _check_mediapipe_safe():
+    """在子进程中测试 MediaPipe 是否安全可用"""
+    try:
+        result = subprocess.run(
+            [_sys.executable, "-c", "import mediapipe; print('OK')"],
+            capture_output=True, text=True, timeout=10
+        )
+        return result.returncode == 0 and "OK" in result.stdout
+    except Exception:
+        return False
+
+MEDIAPIPE_SAFE = _check_mediapipe_safe()
+if not MEDIAPIPE_SAFE:
+    print("⚠️ MediaPipe 不可用（段错误），手势识别功能已禁用")
+
+
+def safe_model_path(project_relative_path: str, safe_name: str) -> str:
+    """将模型文件复制到无中文路径的目录，返回安全路径"""
+    import shutil
+    safe = SAFE_MODEL_DIR / safe_name
+    if not safe.exists():
+        src = Path(project_relative_path)
+        if src.exists():
+            shutil.copy2(str(src), str(safe))
+    return str(safe)
+
+
+# ==================== 口罩/手势类别配置 ====================
+
+MASK_CLASSES = {
+    0: {"name": "正确佩戴", "color": (0, 255, 0)},
+    1: {"name": "佩戴不规范", "color": (0, 165, 255)},
+    2: {"name": "未佩戴", "color": (0, 0, 255)},
+}
+
+# COCO 80类中文映射
+COCO_CN = {
+    "person": "人", "bicycle": "自行车", "car": "汽车", "motorcycle": "摩托车",
+    "airplane": "飞机", "bus": "公交车", "train": "火车", "truck": "卡车",
+    "boat": "船", "traffic light": "红绿灯", "fire hydrant": "消防栓",
+    "stop sign": "停车标志", "parking meter": "停车计时器", "bench": "长椅",
+    "bird": "鸟", "cat": "猫", "dog": "狗", "horse": "马", "sheep": "羊",
+    "cow": "牛", "elephant": "大象", "bear": "熊", "zebra": "斑马",
+    "giraffe": "长颈鹿", "backpack": "背包", "umbrella": "雨伞",
+    "handbag": "手提包", "tie": "领带", "suitcase": "行李箱",
+    "frisbee": "飞盘", "skis": "滑雪板", "snowboard": "单板滑雪",
+    "sports ball": "运动球", "kite": "风筝", "baseball bat": "棒球棒",
+    "baseball glove": "棒球手套", "skateboard": "滑板", "surfboard": "冲浪板",
+    "tennis racket": "网球拍", "bottle": "瓶子", "wine glass": "酒杯",
+    "cup": "杯子", "fork": "叉子", "knife": "刀", "spoon": "勺子",
+    "bowl": "碗", "banana": "香蕉", "apple": "苹果", "sandwich": "三明治",
+    "orange": "橙子", "broccoli": "西兰花", "carrot": "胡萝卜",
+    "hot dog": "热狗", "pizza": "披萨", "donut": "甜甜圈", "cake": "蛋糕",
+    "chair": "椅子", "couch": "沙发", "potted plant": "盆栽",
+    "bed": "床", "dining table": "餐桌", "toilet": "马桶", "tv": "电视",
+    "laptop": "笔记本电脑", "mouse": "鼠标", "remote": "遥控器",
+    "keyboard": "键盘", "cell phone": "手机", "microwave": "微波炉",
+    "oven": "烤箱", "toaster": "烤面包机", "sink": "水槽",
+    "refrigerator": "冰箱", "book": "书", "clock": "时钟", "vase": "花瓶",
+    "scissors": "剪刀", "teddy bear": "泰迪熊", "hair drier": "吹风机",
+    "toothbrush": "牙刷",
+}
+
+
+def cn_name(en_name: str) -> str:
+    """英文类别名转中文"""
+    return COCO_CN.get(en_name, en_name)
+
+
+# ==================== 全局状态初始化 ====================
+
+def init_session_state():
+    defaults = {
+        'monitoring': False,
+        'recording': False,
+        'detection_history': [],
+        'screenshots': [],
+        'alerts': [],
+        'current_frame': None,
+        'frame_count': 0,
+        'start_time': 0,
+        'last_screenshot_time': 0,
+        'last_detect_screenshot_time': 0,
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+
+# ==================== 检测器加载（全部使用安全路径） ====================
+
+@st.cache_resource
+def load_object_detector(model_path='yolov8n.pt', conf=0.5):
+    from src.detector import ObjectDetector
+    return ObjectDetector(model_path=model_path, conf_threshold=conf)
+
+
+@st.cache_resource
+def load_yolo_face_model():
+    """加载YOLOv8专用人脸检测模型"""
+    from ultralytics import YOLO
+    return YOLO("C:/temp/models/yolov8n-face.pt")
+
+
+@st.cache_resource
+def load_mask_detector():
+    from ultralytics import YOLO
+    p = safe_model_path("models/mask_detector.pt", "mask_detector.pt")
+    return YOLO(p)
+
+
+@st.cache_resource
+def load_gesture_detector():
+    """加载手势识别器（MediaPipe HandLandmarker）"""
+    if not MEDIAPIPE_SAFE:
+        return None
+    try:
+        from mediapipe.tasks import python
+        from mediapipe.tasks.python import vision
+        model_path = safe_model_path("models/hand_landmarker.task", "hand_landmarker.task")
+        base = python.BaseOptions(model_asset_path=model_path)
+        opts = vision.HandLandmarkerOptions(
+            base_options=base,
+            num_hands=2,
+            min_hand_detection_confidence=0.3,
+            min_hand_presence_confidence=0.3,
+            min_tracking_confidence=0.3,
+        )
+        return vision.HandLandmarker.create_from_options(opts)
+    except Exception as e:
+        st.warning(f"MediaPipe 加载失败: {e}")
+        return None
+
+
+def classify_gesture(landmarks):
+    """根据手部关键点简单判断手势"""
+    # 指尖和指间关节的y坐标比较
+    tips = [4, 8, 12, 16, 20]  # 拇指、食指、中指、无名指、小指的指尖
+    pips = [3, 6, 10, 14, 18]  # 对应的指间关节
+    fingers_up = []
+    for tip, pip in zip(tips, pips):
+        if tip == 4:  # 拇指特殊处理（水平方向）
+            fingers_up.append(landmarks[tip].x < landmarks[pip].x)
+        else:
+            fingers_up.append(landmarks[tip].y < landmarks[pip].y)
+    count = sum(fingers_up)
+    if count == 0: return "拳头"
+    if count == 5: return "张开手掌"
+    if count == 1 and fingers_up[1]: return "食指指向前方"
+    if count == 2 and fingers_up[1] and fingers_up[2]: return "耶/剪刀手"
+    if count == 1 and fingers_up[0]: return "竖起拇指"
+    return f"{count}根手指"
+
+
+# ==================== 主界面 ====================
+
+def main():
+    init_session_state()
+
+    st.markdown('<div class="main-header">👁️ 智能视觉系统</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">YOLOv8 · MediaPipe · 目标检测 · 人脸识别 · 手势识别 · 口罩检测 · 实时监测</div>', unsafe_allow_html=True)
+    st.markdown("---")
+
+    with st.sidebar:
+        st.markdown("## 🎯 功能导航")
+        app_mode = st.selectbox("选择功能", [
+            "📹 实时监测", "📷 目标检测", "👤 人脸识别", "✋ 手势识别",
+            "😷 口罩检测", "ℹ️ 关于"
+        ], index=0, key="app_mode")
+
+        st.markdown("---")
+        st.markdown("## ⚙️ 全局设置")
+        model_option = st.selectbox("检测模型", [
+            "yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt"
+        ], index=0, key="model_option")
+        conf_threshold = st.slider("置信度阈值", 0.0, 1.0, 0.5, 0.05, key="conf_threshold")
+
+    route = {
+        "📹 实时监测": lambda: show_realtime_monitor(model_option, conf_threshold),
+        "📷 目标检测": lambda: show_object_detection(model_option, conf_threshold),
+        "👤 人脸识别": show_face_detection,
+        "✋ 手势识别": show_gesture_detection,
+        "😷 口罩检测": lambda: show_mask_detection(conf_threshold),
+        "ℹ️ 关于": show_about,
+    }
+    route[app_mode]()
+
+
+# ==================== 实时监测（非阻塞，st.fragment） ====================
+
+def show_realtime_monitor(model_option, conf_threshold):
+    st.markdown("## 📹 实时监测")
+    st.markdown("摄像头实时检测 · 支持手动截图 · 自动截图 · 告警 · 录制")
+
+    with st.expander("⚙️ 监测配置", expanded=True):
+        c1, c2, c3, c4, c5 = st.columns(5)
+        with c1: camera_id = st.selectbox("摄像头", [0, 1, 2], key="cam_id")
+        with c2: enable_object = st.checkbox("目标检测", True, key="en_obj")
+        with c3: enable_face = st.checkbox("人脸识别", True, key="en_face")
+        with c4: enable_gesture = st.checkbox("手势识别", False, key="en_gesture", disabled=not MEDIAPIPE_SAFE, help="MediaPipe 不可用" if not MEDIAPIPE_SAFE else None)
+        with c5: enable_mask = st.checkbox("口罩检测", False, key="en_mask")
+
+        c1, c2, c3, c4 = st.columns(4)
+        with c1: resolution = st.selectbox("分辨率", ["640x480", "1280x720"], key="res")
+        with c2: enable_alerts = st.checkbox("启用告警", True, key="en_alert")
+        with c3: alert_threshold = st.slider("告警阈值", 1, 10, 3, key="alert_th")
+        with c4: enable_auto_ss = st.checkbox("自动截图", False, key="en_auto_ss")
+
+        c1, c2 = st.columns(2)
+        with c1: ss_interval = st.slider("自动截图间隔(秒)", 5, 60, 10, key="ss_int")
+        with c2: ss_on_detect = st.checkbox("检测到目标时截图", False, key="ss_on_det")
+
+        width, height = map(int, resolution.split('x'))
+
+    # 控制按钮（在fragment外面，随时可点）
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1:
+        if st.button("🚀 启动监测", width='stretch', type="primary"):
+            st.session_state['monitoring'] = True
+            st.session_state['frame_count'] = 0
+            st.session_state['start_time'] = time.time()
+    with c2:
+        if st.button("⏹️ 停止监测", width='stretch'):
+            st.session_state['monitoring'] = False
+    with c3:
+        if st.button("📸 手动截图", width='stretch'):
+            frame = st.session_state.get('current_frame')
+            if frame is not None:
+                Path("screenshots").mkdir(exist_ok=True)
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                sp = f"screenshots/manual_{ts}.jpg"
+                cv2.imwrite(sp, frame)
+                st.session_state['screenshots'].append({
+                    'path': sp, 'time': ts,
+                    'detections': {'objects': 0, 'faces': 0, 'note': '手动截图'}
+                })
+                st.toast(f"📸 截图已保存: {sp}")
+            else:
+                st.toast("⚠️ 没有可用画面，请先启动监测")
+    with c4:
+        if st.button("🗑️ 清除历史", width='stretch'):
+            st.session_state['detection_history'] = []
+            st.session_state['screenshots'] = []
+            st.session_state['alerts'] = []
+
+    # Tab页
+    tab1, tab2, tab3, tab4 = st.tabs(["📹 实时画面", "📊 统计分析", "🖼️ 截图管理", "🚨 告警记录"])
+    with tab1:
+        _camera_fragment(
+            camera_id, width, height,
+            enable_object, enable_face, enable_gesture, enable_mask,
+            model_option, conf_threshold,
+            enable_alerts, alert_threshold,
+            enable_auto_ss, ss_interval, ss_on_detect
+        )
+    with tab2: _show_monitor_statistics()
+    with tab3: _show_monitor_screenshots()
+    with tab4: _show_monitor_alerts()
+
+
+@st.fragment(run_every=timedelta(seconds=0.15))
+def _camera_fragment(
+    camera_id, width, height,
+    enable_object, enable_face, enable_gesture, enable_mask,
+    model_option, conf_threshold,
+    enable_alerts, alert_threshold,
+    enable_auto_ss, ss_interval, ss_on_detect
+):
+    """非阻塞摄像头fragment，每150ms自动刷新"""
+    if not st.session_state['monitoring']:
+        st.info("👆 点击 **启动监测** 开始实时检测")
+        return
+
+    # 初始化摄像头（懒加载，缓存在session state）
+    cap_key = f'cap_{camera_id}'
+    if cap_key not in st.session_state or st.session_state[cap_key] is None or not st.session_state[cap_key].isOpened():
+        cap = None
+        for backend in [cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY]:
+            cap = cv2.VideoCapture(camera_id, backend)
+            if cap.isOpened():
+                break
+            cap.release()
+        if cap is None or not cap.isOpened():
+            st.error("❌ 无法打开摄像头")
+            st.session_state['monitoring'] = False
+            return
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        st.session_state[cap_key] = cap
+
+    cap = st.session_state[cap_key]
+    ret, frame = cap.read()
+    if not ret:
+        st.error("❌ 无法读取画面")
+        return
+
+    frame_start = time.time()
+    object_count = 0
+    face_count = 0
+    gesture_count = 0
+    mask_count = 0
+
+    # 目标检测
+    if enable_object:
+        det = load_object_detector(model_option, conf_threshold)
+        results = det.model(frame, conf=conf_threshold, verbose=False)
+        if results[0].boxes is not None:
+            object_count = len(results[0].boxes)
+            for box in results[0].boxes:
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                conf = float(box.conf[0])
+                cls = int(box.cls[0])
+                name = cn_name(det.model.names[cls])
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(frame, f"{name} {conf:.0%}", (x1, y1-8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+    # 人脸识别（YOLOv8专用模型）
+    if enable_face:
+        mp_faces = _detect_faces(frame, conf=0.25)
+        face_count = len(mp_faces)
+        for (x,y,w,h,c) in mp_faces:
+            x,y,w,h=int(x),int(y),int(w),int(h)
+            cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
+            cv2.putText(frame,f"人脸:{c:.0%}",(x,y-8),cv2.FONT_HERSHEY_SIMPLEX,0.5,(255,0,0),2)
+
+    # 手势识别
+    if enable_gesture and MEDIAPIPE_SAFE:
+        try:
+            gd = load_gesture_detector()
+            if gd is None:
+                raise RuntimeError("MediaPipe 不可用")
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            import mediapipe as mp
+            mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            hand_result = gd.detect(mp_img)
+            if hand_result.hand_landmarks:
+                gesture_count = len(hand_result.hand_landmarks)
+                h, w_frame = frame.shape[:2]
+                for hand_lms in hand_result.hand_landmarks:
+                    gesture = classify_gesture(hand_lms)
+                    # 绘制关键点
+                    for lm in hand_lms:
+                        cx, cy = int(lm.x * w_frame), int(lm.y * h)
+                        cv2.circle(frame, (cx, cy), 3, (0, 0, 255), -1)
+                    # 绘制连接线
+                    connections = mp.solutions.hands.HAND_CONNECTIONS
+                    for (a, b) in connections:
+                        ax, ay = int(hand_lms[a].x * w_frame), int(hand_lms[a].y * h)
+                        bx, by = int(hand_lms[b].x * w_frame), int(hand_lms[b].y * h)
+                        cv2.line(frame, (ax, ay), (bx, by), (0, 255, 255), 1)
+                    # 显示手势名称
+                    wrist = hand_lms[0]
+                    cx, cy = int(wrist.x * w_frame), int(wrist.y * h) - 20
+                    cv2.putText(frame, gesture, (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+        except Exception:
+            pass
+
+    # 口罩检测
+    if enable_mask:
+        try:
+            md = load_mask_detector()
+            m_res = md(frame, conf=conf_threshold, verbose=False)
+            if m_res[0].boxes is not None:
+                mask_count = len(m_res[0].boxes)
+                for box in m_res[0].boxes:
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    c = float(box.conf[0])
+                    cls = int(box.cls[0])
+                    info = MASK_CLASSES.get(cls, {"name": "?", "color": (128,128,128)})
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), info['color'], 2)
+                    cv2.putText(frame, f"{info['name']}:{c:.0%}", (x1, y1-8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, info['color'], 2)
+        except Exception:
+            pass
+
+    # FPS
+    fps = 1.0 / max(time.time() - frame_start, 0.001)
+    cv2.putText(frame, f"FPS:{fps:.0f}", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+    info_text = f"目标:{object_count} 人脸:{face_count}"
+    if enable_gesture: info_text += f" 手势:{gesture_count}"
+    if enable_mask: info_text += f" 口罩:{mask_count}"
+    cv2.putText(frame, info_text, (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+    # 保存当前帧到session（供手动截图使用）
+    st.session_state['current_frame'] = frame.copy()
+
+    # 自动截图
+    now = time.time()
+    if enable_auto_ss and (now - st.session_state['last_screenshot_time']) >= ss_interval:
+        st.session_state['last_screenshot_time'] = now
+        Path("screenshots").mkdir(exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        sp = f"screenshots/auto_{ts}.jpg"
+        cv2.imwrite(sp, frame)
+        st.session_state['screenshots'].append({'path': sp, 'time': ts, 'detections': {'objects': object_count, 'faces': face_count}})
+
+    if ss_on_detect and object_count > 0 and (now - st.session_state['last_detect_screenshot_time']) >= 3:
+        st.session_state['last_detect_screenshot_time'] = now
+        Path("screenshots").mkdir(exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        sp = f"screenshots/detect_{ts}.jpg"
+        cv2.imwrite(sp, frame)
+        st.session_state['screenshots'].append({'path': sp, 'time': ts, 'detections': {'objects': object_count, 'faces': face_count}})
+
+    # 告警
+    if enable_alerts and object_count >= alert_threshold:
+        alert = {'time': datetime.now().strftime("%H:%M:%S"), 'message': f"检测到 {object_count} 个目标", 'level': 'warning'}
+        if alert not in st.session_state['alerts']:
+            st.session_state['alerts'].append(alert)
+
+    # 显示画面
+    st.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), channels="RGB", width='stretch')
+
+    # 统计
+    st.session_state['frame_count'] += 1
+    fc = st.session_state['frame_count']
+    total_t = time.time() - st.session_state['start_time']
+    avg_fps = fc / total_t if total_t > 0 else 0
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: st.metric("帧数", fc)
+    with c2: st.metric("FPS", f"{fps:.0f}")
+    with c3: st.metric("平均FPS", f"{avg_fps:.0f}")
+    with c4: st.metric("目标/人脸", f"{object_count}/{face_count}")
+
+    if fc % 30 == 0:
+        st.session_state['detection_history'].append({
+            'time': datetime.now().strftime("%H:%M:%S"), 'frame': fc, 'fps': fps,
+            'objects': object_count, 'faces': face_count
+        })
+
+
+def _show_monitor_statistics():
+    st.markdown("## 📊 统计分析")
+    history = st.session_state['detection_history']
+    if not history:
+        st.info("暂无统计数据"); return
+    st.line_chart([h['fps'] for h in history[-50:]])
+    c1, c2 = st.columns(2)
+    with c1: st.metric("平均目标数", f"{sum(h['objects'] for h in history)/len(history):.1f}")
+    with c2: st.metric("平均人脸数", f"{sum(h['faces'] for h in history)/len(history):.1f}")
+    st.dataframe(history[-20:])
+
+
+def _show_monitor_screenshots():
+    st.markdown("## 🖼️ 截图管理")
+    screenshots = st.session_state['screenshots']
+    if not screenshots:
+        st.info("暂无截图，点击「📸 手动截图」或启用自动截图"); return
+    c1, c2 = st.columns(2)
+    with c1: st.metric("截图总数", len(screenshots))
+    with c2:
+        if st.button("🗑️ 删除所有截图"):
+            for s in screenshots:
+                if Path(s['path']).exists(): os.remove(s['path'])
+            st.session_state['screenshots'] = []; st.rerun()
+    for i, ss in enumerate(screenshots):
+        with st.expander(f"📸 {i+1} - {ss['time']}", expanded=False):
+            c1, c2, c3 = st.columns([3, 2, 1])
+            with c1:
+                if Path(ss['path']).exists(): st.image(ss['path'], width='stretch')
+            with c2:
+                d = ss['detections']
+                note = d.get('note', '')
+                if note:
+                    st.write(f"📝 {note}")
+                else:
+                    st.write(f"🎯 目标: {d.get('objects',0)} | 👤 人脸: {d.get('faces',0)}")
+                st.code(ss['path'])
+                if Path(ss['path']).exists():
+                    with open(ss['path'], 'rb') as f:
+                        st.download_button("📥 下载", f.read(), f"ss_{ss['time']}.jpg", "image/jpeg", key=f"dl_{i}")
+            with c3:
+                if st.button(f"🗑️", key=f"del_{i}"):
+                    if Path(ss['path']).exists(): os.remove(ss['path'])
+                    st.session_state['screenshots'].pop(i); st.rerun()
+
+
+def _show_monitor_alerts():
+    st.markdown("## 🚨 告警记录")
+    alerts = st.session_state['alerts']
+    if not alerts: st.info("暂无告警"); return
+    st.metric("告警总数", len(alerts))
+    for a in reversed(alerts[-20:]):
+        color = "#f5576c" if a['level'] == 'warning' else "#ffa726"
+        st.markdown(f'<div style="background:{color};padding:10px;border-radius:5px;color:white"><strong>{a["time"]}</strong> - {a["message"]}</div>', unsafe_allow_html=True)
+
+
+# ==================== 临时文件工具 ====================
+
+def _save_temp_image(image, suffix='.jpg'):
+    """将 PIL Image 保存到临时文件，确保完全写入后返回路径"""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        image.save(tmp, format='JPEG')
+        tmp.flush()
+        os.fsync(tmp.fileno())
+        return tmp.name
+
+
+def _safe_unlink(path):
+    """安全删除临时文件"""
+    try:
+        if path and os.path.exists(path):
+            os.unlink(path)
+    except OSError:
+        pass
+
+
+# ==================== 目标检测 ====================
+
+def show_object_detection(model_option, conf_threshold):
+    st.markdown("## 📷 目标检测")
+    st.markdown("上传一张或多张图片进行检测，支持批量处理")
+    det = load_object_detector(model_option, conf_threshold)
+    files = st.file_uploader("📤 上传图片（支持多张批量处理）", type=['jpg','jpeg','png','bmp'], accept_multiple_files=True, key='det_up')
+    if files:
+        for f in files:
+            st.markdown(f"---\n**📷 {f.name}**")
+            image = Image.open(f).convert("RGB")
+            c1, c2 = st.columns(2)
+            with c1: st.markdown("原图"); st.image(image, width='stretch')
+            with st.spinner(f"检测 {f.name}..."):
+                tp = _save_temp_image(image, '.jpg')
+                try:
+                    result_img = cv2.imread(tp)
+                    det_model = det.model
+                    raw = det_model(result_img, conf=conf_threshold, verbose=False)
+                    cn_names = []
+                    confs = []
+                    if raw[0].boxes is not None:
+                        for box in raw[0].boxes:
+                            x1,y1,x2,y2 = map(int, box.xyxy[0])
+                            conf = float(box.conf[0]); cls = int(box.cls[0])
+                            name = cn_name(det_model.names[cls])
+                            cn_names.append(name)
+                            confs.append(conf)
+                            cv2.rectangle(result_img, (x1,y1), (x2,y2), (0,255,0), 2)
+                            cv2.putText(result_img, f"{name} {conf:.0%}", (x1,y1-8), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
+                    ri = cv2.cvtColor(result_img, cv2.COLOR_BGR2RGB)
+                finally:
+                    _safe_unlink(tp)
+            with c2: st.markdown("结果"); st.image(ri, width='stretch')
+            c1,c2,c3 = st.columns(3)
+            with c1: st.metric("数量", len(cn_names))
+            with c2:
+                if cn_names: st.metric("主要类别", max(set(cn_names), key=cn_names.count))
+            with c3:
+                if confs: st.metric("置信度", f"{np.mean(confs):.0%}")
+            if cn_names:
+                for i, (n, c) in enumerate(zip(cn_names, confs)):
+                    st.write(f"- **{n}**: {c:.0%}")
+
+
+# ==================== 人脸识别 ====================
+
+def _detect_faces(img, conf=0.25):
+    """YOLOv8专用人脸检测"""
+    model = load_yolo_face_model()
+    faces = []
+    results = model(img, conf=conf, verbose=False)
+    if results[0].boxes is not None:
+        for box in results[0].boxes:
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
+            c = float(box.conf[0])
+            faces.append((x1, y1, x2-x1, y2-y1, c))
+    return faces
+
+
+def show_face_detection():
+    st.markdown("## 👤 人脸识别（YOLOv8专用模型）")
+    st.markdown("使用WIDER FACE数据集训练的YOLOv8人脸检测模型，精度远超MediaPipe")
+    files = st.file_uploader("📤 上传图片（支持多张批量处理）", type=['jpg','jpeg','png','bmp'], accept_multiple_files=True, key='face_up')
+    if files:
+        for f in files:
+            st.markdown(f"---\n**📷 {f.name}**")
+            image = Image.open(f).convert("RGB")
+            c1, c2 = st.columns(2)
+            with c1: st.markdown("原图"); st.image(image, width='stretch')
+            with st.spinner(f"检测 {f.name}..."):
+                tp = _save_temp_image(image, '.jpg')
+                try:
+                    img = cv2.imread(tp)
+                    faces = _detect_faces(img, conf=0.25)
+                    for (x, y, w, h, conf) in faces:
+                        cv2.rectangle(img, (x, y), (x+w, y+h), (255, 0, 0), 2)
+                        cv2.putText(img, f"人脸 {conf:.0%}", (x, y-8), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+                    ri = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                finally:
+                    _safe_unlink(tp)
+            with c2:
+                st.markdown("结果")
+                if faces: st.image(ri, width='stretch')
+                else: st.warning("未检测到人脸")
+            st.metric("人脸数量", len(faces))
+
+
+# ==================== 手势识别 ====================
+
+def show_gesture_detection():
+    st.markdown("## ✋ 手势识别")
+    if not MEDIAPIPE_SAFE:
+        st.error("⚠️ MediaPipe 在当前环境中不可用（段错误），手势识别功能已禁用。")
+        st.info("建议：尝试降级 MediaPipe 版本 `pip install mediapipe==0.10.14` 或使用其他 Python 环境。")
+        return
+    st.markdown("上传一张或多张图片，支持批量处理")
+    files = st.file_uploader("📤 上传图片（支持多张批量处理）", type=['jpg','jpeg','png','bmp'], accept_multiple_files=True, key='gesture_up')
+    if files:
+        for f in files:
+            st.markdown(f"---\n**📷 {f.name}**")
+            image = Image.open(f).convert("RGB")
+            c1, c2 = st.columns(2)
+            with c1: st.markdown("原图"); st.image(image, width='stretch')
+            with st.spinner(f"检测 {f.name}..."):
+                tp = _save_temp_image(image, '.jpg')
+                try:
+                    gd = load_gesture_detector()
+                    img = cv2.imread(tp)
+                    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    import mediapipe as mp
+                    mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+                    result = gd.detect(mp_img)
+                    gestures = []
+                    h, w = img.shape[:2]
+                    if result.hand_landmarks:
+                        for hand_lms in result.hand_landmarks:
+                            gesture = classify_gesture(hand_lms)
+                            gestures.append(gesture)
+                            for lm in hand_lms:
+                                cv2.circle(img, (int(lm.x*w), int(lm.y*h)), 4, (0,0,255), -1)
+                            for (a,b) in mp.solutions.hands.HAND_CONNECTIONS:
+                                ax,ay = int(hand_lms[a].x*w), int(hand_lms[a].y*h)
+                                bx,by = int(hand_lms[b].x*w), int(hand_lms[b].y*h)
+                                cv2.line(img, (ax,ay), (bx,by), (0,255,255), 2)
+                            wrist = hand_lms[0]
+                            cv2.putText(img, gesture, (int(wrist.x*w)-20, int(wrist.y*h)-20), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,255), 2)
+                    ri = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                finally:
+                    _safe_unlink(tp)
+            with c2: st.markdown("结果"); st.image(ri, width='stretch')
+            st.metric("手部数量", len(gestures))
+            for i, g in enumerate(gestures):
+                st.write(f"- **手 {i+1}**: {g}")
+
+
+# ==================== 口罩检测 ====================
+
+def show_mask_detection(conf_threshold):
+    st.markdown("## 😷 口罩检测")
+    st.markdown("上传一张或多张图片，支持批量处理")
+    det = load_mask_detector()
+    files = st.file_uploader("📤 上传图片（支持多张批量处理）", type=['jpg','jpeg','png','bmp'], accept_multiple_files=True, key='mask_up')
+    if files:
+        for f in files:
+            st.markdown(f"---\n**📷 {f.name}**")
+            image = Image.open(f).convert("RGB")
+            c1, c2 = st.columns(2)
+            with c1: st.markdown("原图"); st.image(image, width='stretch')
+            with st.spinner(f"检测 {f.name}..."):
+                tp = _save_temp_image(image, '.jpg')
+                try:
+                    results = det(tp, conf=conf_threshold, verbose=False)
+                    ri = cv2.imread(tp)
+                    counts = {0:0, 1:0, 2:0}
+                    if results[0].boxes is not None:
+                        for box in results[0].boxes:
+                            x1,y1,x2,y2 = map(int, box.xyxy[0])
+                            c = float(box.conf[0]); cls = int(box.cls[0])
+                            info = MASK_CLASSES.get(cls, {"name":"?","color":(128,128,128)})
+                            cv2.rectangle(ri, (x1,y1), (x2,y2), info['color'], 2)
+                            cv2.putText(ri, f"{info['name']}:{c:.0%}", (x1,y1-8), cv2.FONT_HERSHEY_SIMPLEX, 0.6, info['color'], 2)
+                            counts[cls] = counts.get(cls, 0) + 1
+                    ri = cv2.cvtColor(ri, cv2.COLOR_BGR2RGB)
+                finally:
+                    _safe_unlink(tp)
+            with c2: st.markdown("结果"); st.image(ri, width='stretch')
+            total = sum(counts.values())
+            c1,c2,c3,c4 = st.columns(4)
+            with c1: st.metric("总人数", total)
+            with c2: st.metric("正确佩戴", counts[0])
+            with c3: st.metric("不规范", counts[1])
+            with c4: st.metric("未佩戴", counts[2])
+            if total > 0: st.progress(counts[0]/total, text=f"合规率: {counts[0]/total:.0%}")
+
+
+# ==================== 关于 ====================
+
+def show_about():
+    st.markdown("## ℹ️ 关于本项目")
+    st.markdown("""
+    ### 智能视觉系统
+
+    | 功能 | 说明 |
+    |------|------|
+    | 📹 实时监测 | 非阻塞摄像头 · 手动截图 · 自动截图 · 告警 |
+    | 📷 目标检测 | YOLOv8 检测 80+ 物体类别 · 支持批量处理 |
+    | 👤 人脸识别 | YOLOv8 专用人脸检测模型 · 支持批量处理 |
+    | ✋ 手势识别 | MediaPipe HandLandmarker · 支持批量处理 |
+    | 😷 口罩检测 | YOLOv8 口罩佩戴检测 · 支持批量处理 |
+    """)
+
+
+if __name__ == '__main__':
+    main()
+
