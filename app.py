@@ -644,16 +644,8 @@ def show_realtime_monitor(model_option, conf_threshold):
 
     srv = st.session_state['_stream_server']
 
-    # 检测环境：本地还是云端
-    import platform
-    is_local = platform.system() != "Linux" or "streamlit" not in platform.node().lower()
-
     # 摄像头模式选择
-    if is_local:
-        camera_mode = st.radio("摄像头模式", ["🖥️ 本地摄像头", "📱 手机摄像头"], horizontal=True, key="cam_mode")
-    else:
-        camera_mode = "📱 手机摄像头"
-        st.info("☁️ 云端环境，使用手机浏览器摄像头")
+    camera_mode = st.radio("摄像头模式", ["🖥️ 本地摄像头", "📱 手机摄像头"], horizontal=True, key="cam_mode")
 
     if camera_mode == "📱 手机摄像头":
         # 手机摄像头模式
