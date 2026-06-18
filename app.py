@@ -635,8 +635,22 @@ def show_realtime_monitor(model_option, conf_threshold):
 
     srv = st.session_state['_stream_server']
 
+    # 检测是否在云端环境
+    import socket
+    try:
+        # 尝试连接本地摄像头来判断是否在本地
+        test_cap = cv2.VideoCapture(0)
+        is_local = test_cap.isOpened()
+        test_cap.release()
+    except:
+        is_local = False
+
     # 摄像头模式选择
-    camera_mode = st.radio("摄像头模式", ["🖥️ 本地摄像头", "📱 手机摄像头"], horizontal=True, key="cam_mode")
+    if is_local:
+        camera_mode = st.radio("摄像头模式", ["🖥️ 本地摄像头", "📱 手机摄像头"], horizontal=True, key="cam_mode")
+    else:
+        camera_mode = "📱 手机摄像头"
+        st.info("☁️ 云端环境，使用手机浏览器摄像头拍照检测")
 
     if camera_mode == "📱 手机摄像头":
         # 手机摄像头模式
