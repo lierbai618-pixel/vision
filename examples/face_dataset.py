@@ -1,5 +1,5 @@
 """
-人脸识别数据集示例
+人脸识别数据集示例.
 
 使用Kaggle数据集进行人脸识别
 """
@@ -11,13 +11,12 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+
 from src.face_detector import FaceDetector
-import cv2
 
 
 def main():
-    """人脸识别数据集示例"""
-
+    """人脸识别数据集示例."""
     # 创建检测器
     detector = FaceDetector()
 
@@ -66,13 +65,15 @@ def main():
                 results = detector.detect_faces(str(image_path))
                 print(f"  检测到 {results['face_count']} 张人脸")
 
-                if results['face_count'] > 0:
+                if results["face_count"] > 0:
                     for j, (location, confidence) in enumerate(
-                        zip(results['face_locations'], results['face_confidences'])
+                        zip(results["face_locations"], results["face_confidences"])
                     ):
-                        print(f"  人脸 {j+1}: x={location['x']}, y={location['y']}, "
-                              f"宽={location['width']}, 高={location['height']}, "
-                              f"置信度={confidence:.2%}")
+                        print(
+                            f"  人脸 {j + 1}: x={location['x']}, y={location['y']}, "
+                            f"宽={location['width']}, 高={location['height']}, "
+                            f"置信度={confidence:.2%}"
+                        )
             except Exception as e:
                 print(f"  错误: {e}")
 
@@ -80,5 +81,5 @@ def main():
     print("测试完成!")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

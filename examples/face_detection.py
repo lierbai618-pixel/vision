@@ -1,5 +1,5 @@
 """
-人脸识别示例
+人脸识别示例.
 
 演示如何使用FaceDetector进行人脸检测和识别
 """
@@ -11,14 +11,14 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.face_detector import FaceDetector
-import cv2
 import urllib.request
+
+from src.face_detector import FaceDetector
 
 
 def download_face_image(url: str, filename: str) -> str:
-    """下载测试图片"""
-    filepath = Path('data/faces') / filename
+    """下载测试图片."""
+    filepath = Path("data/faces") / filename
     filepath.parent.mkdir(parents=True, exist_ok=True)
 
     if not filepath.exists():
@@ -29,12 +29,11 @@ def download_face_image(url: str, filename: str) -> str:
 
 
 def main():
-    """人脸识别示例"""
-
+    """人脸识别示例."""
     # 创建检测器
     detector = FaceDetector(
         tolerance=0.6,
-        model='hog'  # 使用HOG模型，CPU友好
+        model="hog",  # 使用HOG模型，CPU友好
     )
 
     print("=" * 50)
@@ -43,7 +42,10 @@ def main():
 
     # 测试图片URL（使用公开的人脸图片）
     test_images = [
-        ("https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Gatto_europeo4.jpg/250px-Gatto_europeo4.jpg", "cat.jpg"),
+        (
+            "https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Gatto_europeo4.jpg/250px-Gatto_europeo4.jpg",
+            "cat.jpg",
+        ),
     ]
 
     # 下载并检测
@@ -57,10 +59,12 @@ def main():
 
             print(f"  检测到 {results['face_count']} 张人脸")
 
-            if results['face_count'] > 0:
-                for i, location in enumerate(results['face_locations']):
-                    print(f"  人脸 {i+1}: x={location['x']}, y={location['y']}, "
-                          f"宽={location['width']}, 高={location['height']}")
+            if results["face_count"] > 0:
+                for i, location in enumerate(results["face_locations"]):
+                    print(
+                        f"  人脸 {i + 1}: x={location['x']}, y={location['y']}, "
+                        f"宽={location['width']}, 高={location['height']}"
+                    )
         except Exception as e:
             print(f"  错误: {e}")
 
@@ -78,5 +82,5 @@ def main():
     print("   detector.load_encodings('encodings.pkl')")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

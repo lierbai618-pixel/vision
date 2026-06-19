@@ -1,18 +1,17 @@
 """
-工具函数模块
+工具函数模块.
 
 提供通用的图片处理、路径管理、格式校验等工具函数
 """
 
+from pathlib import Path
+
 import cv2
 import numpy as np
-from pathlib import Path
-from typing import Optional, Tuple, List
 
 
 def load_image(image_path: str) -> np.ndarray:
-    """
-    加载图片
+    """加载图片.
 
     Args:
         image_path: 图片路径（本地路径或URL）
@@ -23,12 +22,13 @@ def load_image(image_path: str) -> np.ndarray:
     Raises:
         ValueError: 图片无法读取时
     """
-    if image_path.startswith(('http://', 'https://')):
+    if image_path.startswith(("http://", "https://")):
         # 下载网络图片
         import tempfile
         import urllib.request
+
         try:
-            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
                 urllib.request.urlretrieve(image_path, tmp.name)
                 image = cv2.imread(tmp.name)
                 Path(tmp.name).unlink(missing_ok=True)
@@ -44,8 +44,7 @@ def load_image(image_path: str) -> np.ndarray:
 
 
 def safe_path(path: str) -> str:
-    """
-    安全化路径（处理中文路径）
+    """安全化路径（处理中文路径）.
 
     Args:
         path: 原始路径
@@ -67,18 +66,16 @@ def safe_path(path: str) -> str:
 
 
 def get_image_extensions() -> set:
-    """
-    获取支持的图片扩展名
+    """获取支持的图片扩展名.
 
     Returns:
         扩展名集合
     """
-    return {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp', '.gif'}
+    return {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp", ".gif"}
 
 
 def is_image_file(path: str) -> bool:
-    """
-    判断文件是否为图片
+    """判断文件是否为图片.
 
     Args:
         path: 文件路径
@@ -89,9 +86,8 @@ def is_image_file(path: str) -> bool:
     return Path(path).suffix.lower() in get_image_extensions()
 
 
-def list_images(folder: str, recursive: bool = False) -> List[str]:
-    """
-    列出文件夹中的所有图片
+def list_images(folder: str, recursive: bool = False) -> list[str]:
+    """列出文件夹中的所有图片.
 
     Args:
         folder: 文件夹路径
@@ -109,8 +105,8 @@ def list_images(folder: str, recursive: bool = False) -> List[str]:
 
     if recursive:
         for ext in extensions:
-            images.extend(str(p) for p in folder_path.rglob(f'*{ext}'))
-            images.extend(str(p) for p in folder_path.rglob(f'*{ext.upper()}'))
+            images.extend(str(p) for p in folder_path.rglob(f"*{ext}"))
+            images.extend(str(p) for p in folder_path.rglob(f"*{ext.upper()}"))
     else:
         for f in folder_path.iterdir():
             if f.is_file() and f.suffix.lower() in extensions:
@@ -119,13 +115,8 @@ def list_images(folder: str, recursive: bool = False) -> List[str]:
     return sorted(set(images))
 
 
-def resize_image(
-    image: np.ndarray,
-    max_width: int = 1280,
-    max_height: int = 720
-) -> np.ndarray:
-    """
-    等比缩放图片
+def resize_image(image: np.ndarray, max_width: int = 1280, max_height: int = 720) -> np.ndarray:
+    """等比缩放图片.
 
     Args:
         image: 原始图片
@@ -147,13 +138,8 @@ def resize_image(
     return cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
 
 
-def crop_roi(
-    image: np.ndarray,
-    x: int, y: int,
-    width: int, height: int
-) -> np.ndarray:
-    """
-    裁剪感兴趣区域
+def crop_roi(image: np.ndarray, x: int, y: int, width: int, height: int) -> np.ndarray:
+    """裁剪感兴趣区域.
 
     Args:
         image: 原始图片
@@ -173,14 +159,15 @@ def crop_roi(
 
 def draw_bounding_box(
     image: np.ndarray,
-    x: int, y: int,
-    width: int, height: int,
-    label: str = '',
-    color: Tuple[int, int, int] = (0, 255, 0),
-    thickness: int = 2
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+    label: str = "",
+    color: tuple[int, int, int] = (0, 255, 0),
+    thickness: int = 2,
 ) -> np.ndarray:
-    """
-    绘制边界框和标签
+    """绘制边界框和标签.
 
     Args:
         image: 原始图片
@@ -199,16 +186,15 @@ def draw_bounding_box(
     if label:
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 0.5
-        (text_w, text_h), baseline = cv2.getTextSize(label, font, font_scale, 1)
+        (text_w, text_h), _baseline = cv2.getTextSize(label, font, font_scale, 1)
         cv2.rectangle(img, (x, y - text_h - 4), (x + text_w, y), color, -1)
         cv2.putText(img, label, (x, y - 2), font, font_scale, (255, 255, 255), 1)
 
     return img
 
 
-def create_output_dir(base_dir: str = 'results') -> Path:
-    """
-    创建输出目录
+def create_output_dir(base_dir: str = "results") -> Path:
+    """创建输出目录.
 
     Args:
         base_dir: 基础目录
@@ -222,17 +208,17 @@ def create_output_dir(base_dir: str = 'results') -> Path:
 
 
 def get_timestamp() -> str:
-    """
-    获取时间戳字符串
+    """获取时间戳字符串.
 
     Returns:
         格式化的时间戳
     """
     from datetime import datetime
+
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # 测试代码
     print("工具函数测试")
     print(f"支持的图片格式: {get_image_extensions()}")
