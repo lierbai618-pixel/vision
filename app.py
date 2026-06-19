@@ -37,6 +37,9 @@ def _find_cjk_font() -> str:
         if Path(p).exists():
             return p
     return ''
+_CJK_FONT_PATH = _find_cjk_font()
+_CJK_FONT_CACHE = {}
+
 def _get_font(font_size):
     if font_size not in _CJK_FONT_CACHE:
         try:
