@@ -160,6 +160,7 @@ weights/
 !models/hand_landmarker.task
 !models/plate_detector.pt
 !models/yolov8m.pt
+!fonts/*.ttf
 *.ts
 *.pb
 *.onnx

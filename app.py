@@ -23,11 +23,10 @@ from datetime import datetime, timedelta
 _FONT_CACHE_FILE = Path("cache/.font_path_cache.txt")
 
 def _find_cjk_font() -> str:
-    """查找中文字体（结果缓存到文件）"""
-    if _FONT_CACHE_FILE.exists():
-        cached = _FONT_CACHE_FILE.read_text().strip()
-        if cached and Path(cached).exists():
-            return cached
+    """查找中文字体（优先使用项目自带字体）"""
+    bundled = Path(__file__).parent / "fonts" / "simhei.ttf"
+    if bundled.exists():
+        return str(bundled)
     candidates = [
         r'C:\Windows\Fonts\simhei.ttf', r'C:\Windows\Fonts\msyh.ttc',
         r'C:\Windows\Fonts\simsun.ttc',
@@ -36,14 +35,8 @@ def _find_cjk_font() -> str:
     ]
     for p in candidates:
         if Path(p).exists():
-            _FONT_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-            _FONT_CACHE_FILE.write_text(p)
             return p
     return ''
-
-_CJK_FONT_PATH = _find_cjk_font()
-_CJK_FONT_CACHE = {}
-
 def _get_font(font_size):
     if font_size not in _CJK_FONT_CACHE:
         try:
