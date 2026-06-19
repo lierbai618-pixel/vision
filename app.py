@@ -90,7 +90,7 @@ class StreamServer:
         self._config = {
             'camera_id': 0, 'width': 640, 'height': 480,
             'enable_object': True, 'enable_face': True, 'enable_mask': False,
-            'model_option': 'yolov8m.pt', 'conf_threshold': 0.5,
+            'model_option': 'models/yolov8m.pt', 'conf_threshold': 0.5,
             'enable_alerts': True, 'alert_threshold': 3,
             'enable_auto_ss': False, 'ss_interval': 10, 'ss_on_detect': False,
         }
@@ -103,7 +103,7 @@ class StreamServer:
             self._det_model = YOLO(cfg['model_option'])
         if cfg['enable_face'] and self._face_model is None:
             fp = Path(__file__).parent / "models" / "yolov8n-face.pt"
-            self._face_model = YOLO(str(fp) if fp.exists() else "yolov8m.pt")
+            self._face_model = YOLO(str(fp) if fp.exists() else "models/yolov8m.pt")
         if cfg['enable_mask'] and self._mask_model is None:
             self._mask_model = YOLO(safe_model_path("models/mask_detector.pt", "mask_detector.pt"))
 
@@ -192,7 +192,7 @@ class StreamServer:
                     if self._face_model is None:
                         from ultralytics import YOLO
                         fp = Path(__file__).parent / "models" / "yolov8n-face.pt"
-                        self._face_model = YOLO(str(fp) if fp.exists() else "yolov8m.pt")
+                        self._face_model = YOLO(str(fp) if fp.exists() else "models/yolov8m.pt")
                     f_res = self._face_model(frame, conf=0.5, imgsz=960, augment=True, verbose=False)
                     if f_res[0].boxes is not None:
                         face_count = len(f_res[0].boxes)
@@ -446,7 +446,7 @@ def init_session_state():
 # ==================== 检测器加载（全部使用安全路径） ====================
 
 @st.cache_resource
-def load_object_detector(model_path='yolov8m.pt', conf=0.5):
+def load_object_detector(model_path='models/yolov8m.pt', conf=0.5):
     from src.detector import ObjectDetector
     return ObjectDetector(model_path=model_path, conf_threshold=conf)
 
@@ -457,7 +457,7 @@ def load_yolo_face_model():
     from ultralytics import YOLO
     fp = Path(__file__).parent / "models" / "yolov8n-face.pt"
     if not fp.exists(): fp = Path("C:/temp/models/yolov8n-face.pt")
-    if not fp.exists(): fp = Path("yolov8m.pt")
+    if not fp.exists(): fp = Path("models/yolov8m.pt")
     return YOLO(str(fp))
 
 
@@ -530,7 +530,7 @@ def main():
         st.markdown("---")
         st.markdown("## ⚙️ 全局设置")
         model_option = st.selectbox("检测模型", [
-            "models/custom_items.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt", "yolov8s.pt", "yolov8n.pt"
+            "models/custom_items.pt", "models/yolov8m.pt", "yolov8l.pt", "yolov8x.pt", "yolov8s.pt", "yolov8n.pt"
         ], index=0, key="model_option", help="custom_items.pt 是你训练的专用模型，精度最高")
         conf_threshold = st.slider("置信度阈值", 0.0, 1.0, 0.5, 0.05, key="conf_threshold", help="降低阈值可检测更多目标，提高阈值可减少误检")
 

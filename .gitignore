@@ -1,4 +1,4 @@
-# Byte-compiled / optimized / DLL files
+﻿# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -159,6 +159,7 @@ weights/
 !models/mask_detector.pt
 !models/hand_landmarker.task
 !models/plate_detector.pt
+!models/yolov8m.pt
 *.ts
 *.pb
 *.onnx
