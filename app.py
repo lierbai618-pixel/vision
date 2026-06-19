@@ -532,7 +532,7 @@ def main():
         model_option = st.selectbox("检测模型", [
             "models/custom_items.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt", "yolov8s.pt", "yolov8n.pt"
         ], index=0, key="model_option", help="custom_items.pt 是你训练的专用模型，精度最高")
-        conf_threshold = st.slider("置信度阈值", 0.0, 1.0, 0.5, 0.05, key="conf_threshold")
+        conf_threshold = st.slider("置信度阈值", 0.0, 1.0, 0.35, 0.05, key="conf_threshold", help="降低阈值可检测更多目标，提高阈值可减少误检")
 
     route = {
         "📹 实时监测": lambda: show_realtime_monitor(model_option, conf_threshold),
