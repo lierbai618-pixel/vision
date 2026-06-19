@@ -90,7 +90,7 @@ class StreamServer:
         self._config = {
             'camera_id': 0, 'width': 640, 'height': 480,
             'enable_object': True, 'enable_face': True, 'enable_mask': False,
-            'model_option': 'yolov8n.pt', 'conf_threshold': 0.35,
+            'model_option': 'yolov8m.pt', 'conf_threshold': 0.5,
             'enable_alerts': True, 'alert_threshold': 3,
             'enable_auto_ss': False, 'ss_interval': 10, 'ss_on_detect': False,
         }
@@ -103,7 +103,7 @@ class StreamServer:
             self._det_model = YOLO(cfg['model_option'])
         if cfg['enable_face'] and self._face_model is None:
             fp = Path(__file__).parent / "models" / "yolov8n-face.pt"
-            self._face_model = YOLO(str(fp) if fp.exists() else "yolov8n.pt")
+            self._face_model = YOLO(str(fp) if fp.exists() else "yolov8m.pt")
         if cfg['enable_mask'] and self._mask_model is None:
             self._mask_model = YOLO(safe_model_path("models/mask_detector.pt", "mask_detector.pt"))
 
@@ -164,7 +164,7 @@ class StreamServer:
                     if self._det_model is None:
                         from ultralytics import YOLO
                         self._det_model = YOLO(cfg['model_option'])
-                    results = self._det_model(frame, conf=cfg['conf_threshold'], iou=0.5, agnostic_nms=True, imgsz=640, verbose=False)
+                    results = self._det_model(frame, conf=cfg['conf_threshold'], iou=0.5, agnostic_nms=True, imgsz=960, verbose=False)
                     if results[0].boxes is not None:
                         obj_count = len(results[0].boxes)
                         names = results[0].names
@@ -192,8 +192,8 @@ class StreamServer:
                     if self._face_model is None:
                         from ultralytics import YOLO
                         fp = Path(__file__).parent / "models" / "yolov8n-face.pt"
-                        self._face_model = YOLO(str(fp) if fp.exists() else "yolov8n.pt")
-                    f_res = self._face_model(frame, conf=0.5, imgsz=640, verbose=False)
+                        self._face_model = YOLO(str(fp) if fp.exists() else "yolov8m.pt")
+                    f_res = self._face_model(frame, conf=0.5, imgsz=960, verbose=False)
                     if f_res[0].boxes is not None:
                         face_count = len(f_res[0].boxes)
                         for box in f_res[0].boxes:
@@ -209,7 +209,7 @@ class StreamServer:
                     if self._mask_model is None:
                         from ultralytics import YOLO
                         self._mask_model = YOLO(safe_model_path("models/mask_detector.pt", "mask_detector.pt"))
-                    m_res = self._mask_model(frame, conf=cfg['conf_threshold'], iou=0.5, agnostic_nms=True, imgsz=640, verbose=False)
+                    m_res = self._mask_model(frame, conf=cfg['conf_threshold'], iou=0.5, agnostic_nms=True, imgsz=960, verbose=False)
                     if m_res[0].boxes is not None:
                         mask_count = len(m_res[0].boxes)
                         for box in m_res[0].boxes:
@@ -446,7 +446,7 @@ def init_session_state():
 # ==================== 检测器加载（全部使用安全路径） ====================
 
 @st.cache_resource
-def load_object_detector(model_path='yolov8n.pt', conf=0.5):
+def load_object_detector(model_path='yolov8m.pt', conf=0.5):
     from src.detector import ObjectDetector
     return ObjectDetector(model_path=model_path, conf_threshold=conf)
 
@@ -457,7 +457,7 @@ def load_yolo_face_model():
     from ultralytics import YOLO
     fp = Path(__file__).parent / "models" / "yolov8n-face.pt"
     if not fp.exists(): fp = Path("C:/temp/models/yolov8n-face.pt")
-    if not fp.exists(): fp = Path("yolov8n.pt")
+    if not fp.exists(): fp = Path("yolov8m.pt")
     return YOLO(str(fp))
 
 
@@ -532,7 +532,7 @@ def main():
         model_option = st.selectbox("检测模型", [
             "models/custom_items.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt", "yolov8s.pt", "yolov8n.pt"
         ], index=0, key="model_option", help="custom_items.pt 是你训练的专用模型，精度最高")
-        conf_threshold = st.slider("置信度阈值", 0.0, 1.0, 0.35, 0.05, key="conf_threshold", help="降低阈值可检测更多目标，提高阈值可减少误检")
+        conf_threshold = st.slider("置信度阈值", 0.0, 1.0, 0.5, 0.05, key="conf_threshold", help="降低阈值可检测更多目标，提高阈值可减少误检")
 
     route = {
         "📹 实时监测": lambda: show_realtime_monitor(model_option, conf_threshold),
@@ -625,7 +625,7 @@ def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_f
         if enable_face:
             try:
                 face_model = load_yolo_face_model()
-                f_res = face_model(img, conf=0.25, verbose=False)
+                f_res = face_model(img, conf=0.5, verbose=False)
                 if f_res[0].boxes is not None:
                     face_count = len(f_res[0].boxes)
                     for box in f_res[0].boxes:
@@ -926,7 +926,7 @@ def show_object_detection(model_option, conf_threshold):
 
 # ==================== 人脸识别 ====================
 
-def _detect_faces(img, conf=0.25):
+def _detect_faces(img, conf=0.5):
     """YOLOv8专用人脸检测"""
     model = load_yolo_face_model()
     faces = []
@@ -953,7 +953,7 @@ def show_face_detection():
                 tp = _save_temp_image(image, '.jpg')
                 try:
                     img = cv2.imread(tp)
-                    faces = _detect_faces(img, conf=0.25)
+                    faces = _detect_faces(img, conf=0.5)
                     face_texts = []
                     for (x, y, w, h, conf) in faces:
                         cv2.rectangle(img, (x, y), (x+w, y+h), (255, 0, 0), 2)
