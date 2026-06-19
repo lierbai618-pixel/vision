@@ -1,18 +1,19 @@
 """
-手势识别模块
+手势识别模块.
 
 使用 MediaPipe HandLandmarker 进行手势识别
 """
 
+from __future__ import annotations
+
+from pathlib import Path
+
 import cv2
 import numpy as np
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 
 class GestureRecognizer:
-    """
-    手势识别器
+    """手势识别器.
 
     使用 MediaPipe HandLandmarker 检测手部关键点并识别手势
 
@@ -23,21 +24,15 @@ class GestureRecognizer:
 
     # 手势类别
     GESTURES = {
-        'fist': '拳头',
-        'open_palm': '张开手掌',
-        'pointing': '食指指向前方',
-        'peace': '耶/剪刀手',
-        'thumbs_up': '竖起拇指',
+        "fist": "拳头",
+        "open_palm": "张开手掌",
+        "pointing": "食指指向前方",
+        "peace": "耶/剪刀手",
+        "thumbs_up": "竖起拇指",
     }
 
-    def __init__(
-        self,
-        num_hands: int = 2,
-        min_detection_confidence: float = 0.3,
-        min_tracking_confidence: float = 0.3
-    ):
-        """
-        初始化手势识别器
+    def __init__(self, num_hands: int = 2, min_detection_confidence: float = 0.3, min_tracking_confidence: float = 0.3):
+        """初始化手势识别器.
 
         Args:
             num_hands: 最大检测手数
@@ -50,7 +45,7 @@ class GestureRecognizer:
         self._detector = None
 
     def _load_detector(self):
-        """懒加载 MediaPipe 检测器"""
+        """懒加载 MediaPipe 检测器."""
         if self._detector is not None:
             return
 
@@ -76,8 +71,8 @@ class GestureRecognizer:
         except ImportError:
             raise RuntimeError("MediaPipe 未安装，请运行: pip install mediapipe")
 
-    def _find_model(self) -> Optional[str]:
-        """查找 hand_landmarker.task 模型文件"""
+    def _find_model(self) -> str | None:
+        """查找 hand_landmarker.task 模型文件."""
         candidate_paths = [
             "models/hand_landmarker.task",
             str(Path(__file__).parent.parent / "models" / "hand_landmarker.task"),
@@ -89,8 +84,7 @@ class GestureRecognizer:
         return None
 
     def _classify_gesture(self, landmarks) -> str:
-        """
-        根据手部关键点判断手势
+        """根据手部关键点判断手势.
 
         Args:
             landmarks: MediaPipe 手部关键点列表
@@ -112,21 +106,20 @@ class GestureRecognizer:
         count = sum(fingers_up)
 
         if count == 0:
-            return self.GESTURES['fist']
+            return self.GESTURES["fist"]
         if count == 5:
-            return self.GESTURES['open_palm']
+            return self.GESTURES["open_palm"]
         if count == 1 and fingers_up[1]:
-            return self.GESTURES['pointing']
+            return self.GESTURES["pointing"]
         if count == 2 and fingers_up[1] and fingers_up[2]:
-            return self.GESTURES['peace']
+            return self.GESTURES["peace"]
         if count == 1 and fingers_up[0]:
-            return self.GESTURES['thumbs_up']
+            return self.GESTURES["thumbs_up"]
 
         return f"{count}根手指"
 
-    def detect_hands(self, image_path: str) -> Dict:
-        """
-        检测图片中的手部
+    def detect_hands(self, image_path: str) -> dict:
+        """检测图片中的手部.
 
         Args:
             image_path: 图片路径
@@ -146,34 +139,24 @@ class GestureRecognizer:
 
         # MediaPipe 检测
         import mediapipe as mp
+
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
         result = self._detector.detect(mp_image)
 
         hands = []
         if result.hand_landmarks:
-            h, w = image.shape[:2]
+            _h, _w = image.shape[:2]
             for hand_lms in result.hand_landmarks:
                 gesture = self._classify_gesture(hand_lms)
                 landmarks = []
                 for lm in hand_lms:
-                    landmarks.append({
-                        'x': lm.x,
-                        'y': lm.y,
-                        'z': lm.z
-                    })
-                hands.append({
-                    'gesture': gesture,
-                    'landmarks': landmarks
-                })
+                    landmarks.append({"x": lm.x, "y": lm.y, "z": lm.z})
+                hands.append({"gesture": gesture, "landmarks": landmarks})
 
-        return {
-            'hand_count': len(hands),
-            'hands': hands
-        }
+        return {"hand_count": len(hands), "hands": hands}
 
-    def detect_hands_in_frame(self, frame: np.ndarray) -> Tuple[int, List[Dict]]:
-        """
-        检测视频帧中的手部（用于实时检测）
+    def detect_hands_in_frame(self, frame: np.ndarray) -> tuple[int, list[dict]]:
+        """检测视频帧中的手部（用于实时检测）.
 
         Args:
             frame: BGR 格式的视频帧
@@ -185,26 +168,23 @@ class GestureRecognizer:
 
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         import mediapipe as mp
+
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
         result = self._detector.detect(mp_image)
 
         hands = []
         if result.hand_landmarks:
-            h, w = frame.shape[:2]
+            _h, _w = frame.shape[:2]
             for hand_lms in result.hand_landmarks:
                 gesture = self._classify_gesture(hand_lms)
-                hands.append({
-                    'gesture': gesture,
-                    'landmarks': hand_lms
-                })
+                hands.append({"gesture": gesture, "landmarks": hand_lms})
 
         return len(hands), hands
 
 
 # 便捷函数
-def detect_gestures_in_image(image_path: str) -> Dict:
-    """
-    快速检测单张图片的手势
+def detect_gestures_in_image(image_path: str) -> dict:
+    """快速检测单张图片的手势.
 
     Args:
         image_path: 图片路径
@@ -216,7 +196,7 @@ def detect_gestures_in_image(image_path: str) -> Dict:
     return recognizer.detect_hands(image_path)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # 测试代码
     print("手势识别器测试")
 
@@ -225,7 +205,7 @@ if __name__ == '__main__':
         test_image = "https://ultralytics.com/images/bus.jpg"
         results = recognizer.detect_hands(test_image)
         print(f"检测到 {results['hand_count']} 只手")
-        for i, hand in enumerate(results['hands']):
-            print(f"  手 {i+1}: {hand['gesture']}")
+        for i, hand in enumerate(results["hands"]):
+            print(f"  手 {i + 1}: {hand['gesture']}")
     except Exception as e:
         print(f"测试失败: {e}")
