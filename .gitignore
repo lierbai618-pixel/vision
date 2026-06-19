@@ -157,6 +157,8 @@ weights/
 !models/custom_items.pt
 !models/yolov8n-face.pt
 !models/mask_detector.pt
+!models/hand_landmarker.task
+!models/plate_detector.pt
 *.ts
 *.pb
 *.onnx

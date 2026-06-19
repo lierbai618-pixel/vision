@@ -747,6 +747,7 @@ def show_realtime_monitor(model_option, conf_threshold):
         with c2: enable_object = st.checkbox("目标检测", True, key="en_obj")
         with c3: enable_face = st.checkbox("人脸识别", True, key="en_face")
         with c4: enable_mask = st.checkbox("口罩检测", False, key="en_mask")
+        with c1: enable_plate = st.checkbox("车牌检测", False, key="en_plate", help="需要训练好的车牌检测模型")
 
         c1, c2, c3, c4 = st.columns(4)
         with c1: resolution = st.selectbox("分辨率", ["640x480", "1280x720", "320x240"], key="res")
