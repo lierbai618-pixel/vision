@@ -174,9 +174,9 @@ class StreamServer:
                             cls = int(box.cls[0])
                             # 判断是自定义模型还是通用模型
                             if "custom" in cfg['model_option']:
-                                name = CUSTOM_ITEMS_CN.get(names[cls], names[cls])
+                                name = cn_name(names[cls])
                             else:
-                                name = COCO_CN.get(names[cls], names[cls])
+                                name = cn_name(names[cls])
                             # 人用绿色，其他目标用蓝色
                             if names[cls] == "person":
                                 color = (0, 255, 0)
@@ -395,10 +395,9 @@ COCO_CN = {
     "toothbrush": "牙刷",
 }
 
-
 def cn_name(en_name: str) -> str:
-    """英文类别名转中文"""
-    return COCO_CN.get(en_name, en_name)
+    """英文类别名转中文，支持COCO和自定义类别"""
+    return COCO_CN.get(en_name, CUSTOM_ITEMS_CN.get(en_name, en_name))
 
 
 # 自定义物品类别中文映射
@@ -530,8 +529,8 @@ def main():
         st.markdown("---")
         st.markdown("## ⚙️ 全局设置")
         model_option = st.selectbox("检测模型", [
-            "models/custom_items.pt", "models/yolov8m.pt", "yolov8l.pt", "yolov8x.pt", "yolov8s.pt", "yolov8n.pt"
-        ], index=0, key="model_option", help="custom_items.pt 是你训练的专用模型，精度最高")
+            "models/yolov8m.pt", "models/custom_items.pt", "yolov8l.pt", "yolov8x.pt", "yolov8s.pt", "yolov8n.pt"
+        ], index=0, key="model_option", help="yolov8m.pt 通用80类检测，custom_items.pt 专用10类物品检测")
         conf_threshold = st.slider("置信度阈值", 0.0, 1.0, 0.5, 0.05, key="conf_threshold", help="降低阈值可检测更多目标，提高阈值可减少误检")
 
     route = {
@@ -614,7 +613,7 @@ def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_f
                         x1, y1, x2, y2 = map(int, box.xyxy[0])
                         c = float(box.conf[0])
                         cls = int(box.cls[0])
-                        name = COCO_CN.get(names[cls], names[cls])
+                        name = cn_name(names[cls])
                         color = (0, 255, 0) if names[cls] == "person" else (255, 0, 0)
                         cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
                         text_items.append((f"{name} {c:.0%}", (x1, max(y1 - 18, 0)), 20, color))
