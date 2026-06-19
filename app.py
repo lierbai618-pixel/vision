@@ -111,7 +111,7 @@ class StreamServer:
         if self._running:
             return
         self._config.update(kwargs)
-        self._config['model_option'] = 'yolov8m.pt'
+        # model_option 由用户 UI 选择决定，不再硬编码覆盖
         cfg = self._config
         # 预加载模型
         self.preload_models()
@@ -164,7 +164,7 @@ class StreamServer:
                     if self._det_model is None:
                         from ultralytics import YOLO
                         self._det_model = YOLO(cfg['model_option'])
-                    results = self._det_model(frame, conf=cfg['conf_threshold'], iou=0.5, agnostic_nms=True, imgsz=960, verbose=False)
+                    results = self._det_model(frame, conf=cfg['conf_threshold'], iou=0.5, agnostic_nms=False, imgsz=960, augment=True, verbose=False)
                     if results[0].boxes is not None:
                         obj_count = len(results[0].boxes)
                         names = results[0].names
@@ -173,7 +173,7 @@ class StreamServer:
                             c = float(box.conf[0])
                             cls = int(box.cls[0])
                             # 判断是自定义模型还是通用模型
-                            if "custom" in model_option:
+                            if "custom" in cfg['model_option']:
                                 name = CUSTOM_ITEMS_CN.get(names[cls], names[cls])
                             else:
                                 name = COCO_CN.get(names[cls], names[cls])
@@ -193,7 +193,7 @@ class StreamServer:
                         from ultralytics import YOLO
                         fp = Path(__file__).parent / "models" / "yolov8n-face.pt"
                         self._face_model = YOLO(str(fp) if fp.exists() else "yolov8m.pt")
-                    f_res = self._face_model(frame, conf=0.5, imgsz=960, verbose=False)
+                    f_res = self._face_model(frame, conf=0.5, imgsz=960, augment=True, verbose=False)
                     if f_res[0].boxes is not None:
                         face_count = len(f_res[0].boxes)
                         for box in f_res[0].boxes:
@@ -209,7 +209,7 @@ class StreamServer:
                     if self._mask_model is None:
                         from ultralytics import YOLO
                         self._mask_model = YOLO(safe_model_path("models/mask_detector.pt", "mask_detector.pt"))
-                    m_res = self._mask_model(frame, conf=cfg['conf_threshold'], iou=0.5, agnostic_nms=True, imgsz=960, verbose=False)
+                    m_res = self._mask_model(frame, conf=cfg['conf_threshold'], iou=0.5, agnostic_nms=False, imgsz=960, augment=True, verbose=False)
                     if m_res[0].boxes is not None:
                         mask_count = len(m_res[0].boxes)
                         for box in m_res[0].boxes:
@@ -606,7 +606,7 @@ def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_f
             try:
                 from ultralytics import YOLO
                 det_model = YOLO(model_option)
-                results = det_model(img, conf=conf_threshold, iou=0.5, agnostic_nms=True, imgsz=960, verbose=False)
+                results = det_model(img, conf=conf_threshold, iou=0.5, agnostic_nms=False, imgsz=960, augment=True, verbose=False)
                 if results[0].boxes is not None:
                     obj_count = len(results[0].boxes)
                     names = results[0].names
@@ -890,7 +890,7 @@ def show_object_detection(model_option, conf_threshold):
                 try:
                     result_img = cv2.imread(tp)
                     det_model = det.model
-                    raw = det_model(result_img, conf=conf_threshold, iou=0.4, agnostic_nms=True, imgsz=960, verbose=False)
+                    raw = det_model(result_img, conf=conf_threshold, iou=0.4, agnostic_nms=False, imgsz=960, augment=True, verbose=False)
                     cn_names = []
                     confs = []
                     if raw[0].boxes is not None:
