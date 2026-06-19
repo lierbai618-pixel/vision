@@ -545,151 +545,24 @@ def main():
 
 def show_mobile_camera(model_option, conf_threshold):
     """使用浏览器摄像头检测（支持手机）"""
-    st.markdown("### 📱 手机摄像头检测")
+    st.markdown("### \U0001f4f1 \u624b\u673a\u6444\u50cf\u5934\u68c0\u6d4b")
 
-    # 检测选项
+    # \u68c0\u6d4b\u9009\u9879
     c1, c2, c3 = st.columns(3)
-    with c1: enable_object = st.checkbox("🎯 目标检测", True, key="mob_obj")
-    with c2: enable_face = st.checkbox("👤 人脸识别", True, key="mob_face")
-    with c3: enable_mask = st.checkbox("😷 口罩检测", False, key="mob_mask")
+    with c1: enable_object = st.checkbox("\U0001f3af \u76ee\u6807\u68c0\u6d4b", True, key="mob_obj")
+    with c2: enable_face = st.checkbox("\U0001f464 \u4eba\u8138\u8bc6\u522b", True, key="mob_face")
+    with c3: enable_mask = st.checkbox("\U0001f637 \u53e3\u7f69\u68c0\u6d4b", False, key="mob_mask")
 
-    # 模式选择
-    mode = st.radio("检测模式", ["🎬 实时视频流", "📸 拍照检测"], horizontal=True, key="mob_mode")
-
-    if mode == "🎬 实时视频流":
-        show_webrtc_realtime(model_option, conf_threshold, enable_object, enable_face, enable_mask)
-    else:
-        show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_face, enable_mask)
-
-def show_webrtc_realtime(model_option, conf_threshold, enable_object, enable_face, enable_mask):
-    """WebRTC 实时视频流检测（支持手机和电脑浏览器）"""
-    try:
-        from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
-        import av
-    except ImportError:
-        st.error("实时视频流需要安装 streamlit-webrtc: pip install streamlit-webrtc")
-        st.info("降级为拍照模式")
-        show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_face, enable_mask)
-        return
-
-    st.markdown("#### 📺 实时视频检测")
-    st.caption("开启摄像头后，AI 将实时分析每一帧画面")
-
-    # 摄像头朝向
-    facing = st.radio("📷 摄像头", ["后置摄像头", "前置摄像头"], horizontal=True, key="webrtc_facing")
-    video_constraints = {
-        "video": {"facingMode": {"exact": "environment"} if facing == "后置摄像头" else "user"},
-        "audio": False,
-    }
-
-    # 模型加载（使用缓存避免重复加载）
-    @st.cache_resource
-    def _get_det_model(path):
-        from ultralytics import YOLO
-        return YOLO(path)
-
-    @st.cache_resource
-    def _get_face_model_webrtc():
-        from ultralytics import YOLO
-        fp = Path(__file__).parent / "models" / "yolov8n-face.pt"
-        if not fp.exists():
-            fp = Path("models/yolov8m.pt")
-        return YOLO(str(fp))
-
-    @st.cache_resource
-    def _get_mask_model_webrtc():
-        from ultralytics import YOLO
-        p = safe_model_path("models/mask_detector.pt", "mask_detector.pt")
-        return YOLO(p)
-
-    det_model = _get_det_model(model_option) if enable_object else None
-    face_model = _get_face_model_webrtc() if enable_face else None
-    mask_model = _get_mask_model_webrtc() if enable_mask else None
-
-    # 统计容器
-    stats_container = st.empty()
-
-    # WebRTC 回调：处理每一帧
-    def video_frame_callback(frame):
-        img = frame.to_ndarray(format="bgr24")
-        text_items = []
-        obj_count = 0
-        face_count = 0
-        mask_count = 0
-
-        # 目标检测
-        if det_model is not None:
-            try:
-                results = det_model(img, conf=conf_threshold, iou=0.5, agnostic_nms=False, imgsz=640, augment=False, verbose=False)
-                if results[0].boxes is not None:
-                    obj_count = len(results[0].boxes)
-                    names = results[0].names
-                    for box in results[0].boxes:
-                        x1, y1, x2, y2 = map(int, box.xyxy[0])
-                        c = float(box.conf[0])
-                        cls = int(box.cls[0])
-                        name = cn_name(names[cls])
-                        color = (0, 255, 0) if names[cls] == "person" else (255, 0, 0)
-                        cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
-                        text_items.append((f"{name} {c:.0%}", (x1, max(y1 - 18, 0)), 16, color))
-            except Exception:
-                pass
-
-        # 人脸识别
-        if face_model is not None:
-            try:
-                f_res = face_model(img, conf=0.5, verbose=False)
-                if f_res[0].boxes is not None:
-                    face_count = len(f_res[0].boxes)
-                    for box in f_res[0].boxes:
-                        x1, y1, x2, y2 = map(int, box.xyxy[0])
-                        c = float(box.conf[0])
-                        cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 0), 2)
-                        text_items.append((f"人脸 {c:.0%}", (x1, max(y1 - 18, 0)), 16, (255, 0, 0)))
-            except Exception:
-                pass
-
-        # 口罩检测
-        if mask_model is not None:
-            try:
-                m_res = mask_model(img, conf=conf_threshold, verbose=False)
-                if m_res[0].boxes is not None:
-                    mask_count = len(m_res[0].boxes)
-                    for box in m_res[0].boxes:
-                        x1, y1, x2, y2 = map(int, box.xyxy[0])
-                        c = float(box.conf[0])
-                        cls = int(box.cls[0])
-                        info = MASK_CLASSES.get(cls, {"name": "?", "color": (128, 128, 128)})
-                        cv2.rectangle(img, (x1, y1), (x2, y2), info["color"], 2)
-                        text_items.append((f"{info['name']}:{c:.0%}", (x1, max(y1 - 18, 0)), 16, info["color"]))
-            except Exception:
-                pass
-
-        # 绘制中文文字
-        if text_items:
-            img = batch_draw_texts(img, text_items)
-
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
-
-    # 启动 WebRTC
-    rtc_config = RTCConfiguration({"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]})
-    ctx = webrtc_streamer(
-        key="yolov8-realtime",
-        mode=WebRtcMode.SENDRECV,
-        rtc_configuration=rtc_config,
-        media_stream_constraints=video_constraints,
-        video_frame_callback=video_frame_callback,
-        async_processing=True,
-    )
-
-    # 显示状态提示
-    if ctx.state.playing:
-        st.success("🟢 实时检测已启动 - 检测结果叠加在视频画面上")
-        st.caption("使用 640px 保证流畅 💡 手机上建议切换后置摄像头获得更好的检测效果")
-    else:
-        st.info("🔴 点击上方 PLAY 按钮开启实时检测")
+    # \u9ed8\u8ba4\u4f7f\u7528\u62cd\u7167\u6a21\u5f0f\uff08\u6700\u53ef\u9760\uff09
+    show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_face, enable_mask)
 
 
+
+@st.cache_resource
+def _get_cached_model(path):
+    """缓存YOLO模型，避免重复加载"""
+    from ultralytics import YOLO
+    return YOLO(path)
 
 
 def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_face, enable_mask):
@@ -731,8 +604,7 @@ def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_f
         # 目标检测
         if enable_object:
             try:
-                from ultralytics import YOLO
-                det_model = YOLO(model_option)
+                det_model = _get_cached_model(model_option)
                 results = det_model(img, conf=conf_threshold, iou=0.5, agnostic_nms=False, imgsz=960, augment=True, verbose=False)
                 if results[0].boxes is not None:
                     obj_count = len(results[0].boxes)
