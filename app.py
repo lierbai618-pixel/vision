@@ -1,44 +1,36 @@
-﻿# ==================== 自动安装缺失依赖 ====================
-import subprocess, sys as _sys, os as _os
+# ==================== 自动安装缺失依赖 ====================
+import subprocess as _sp
+import sys as _sy
 
-_REQUIRED_PACKAGES = [
-    "opencv-python-headless",
-    "ultralytics",
-    "mediapipe",
-    "streamlit",
-    "streamlit-webrtc",
-    "aiortc",
-    "Pillow",
-    "numpy",
-    "pandas",
-    "matplotlib",
-    "seaborn",
-    "fastapi",
-    "uvicorn",
-    "python-multipart",
-    "pyyaml",
-    "tqdm",
-    "loguru",
-]
+def _ti(pkg, imp):
+    try:
+        __import__(imp)
+        return
+    except ImportError:
+        pass
+    try:
+        _sp.call([_sy.executable, "-m", "pip", "install", "--quiet", "--disable-pip-version-check", pkg],
+                 stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+    except Exception:
+        pass
 
-def _ensure_packages():
-    missing = []
-    for pkg in _REQUIRED_PACKAGES:
-        name = pkg.lower().replace("-", "_").split("_")[0]
-        try:
-            __import__(name)
-        except ImportError:
-            missing.append(pkg)
-    if missing:
-        print(f"[auto-install] Installing missing packages: {', '.join(missing)}")
-        subprocess.check_call([
-            _sys.executable, "-m", "pip", "install",
-            "--quiet", "--no-warn-script-location",
-        ] + missing)
-        print("[auto-install] Done.")
-
-_ensure_packages()
-del _ensure_packages, _REQUIRED_PACKAGES
+_ti("opencv-python-headless", "cv2")
+_ti("ultralytics", "ultralytics")
+_ti("mediapipe", "mediapipe")
+_ti("Pillow", "PIL")
+_ti("numpy", "numpy")
+_ti("pandas", "pandas")
+_ti("matplotlib", "matplotlib")
+_ti("seaborn", "seaborn")
+_ti("streamlit", "streamlit")
+_ti("aiortc", "aiortc")
+_ti("fastapi", "fastapi")
+_ti("uvicorn", "uvicorn")
+_ti("python-multipart", "multipart")
+_ti("pyyaml", "yaml")
+_ti("tqdm", "tqdm")
+_ti("loguru", "loguru")
+del _ti, _sp, _sy
 
 """
 智能视觉系统 - 统一版
@@ -1342,3 +1334,5 @@ def show_about():
 
 if __name__ == '__main__':
     main()
+
+
