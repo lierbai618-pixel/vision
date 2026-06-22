@@ -1,3 +1,45 @@
+﻿# ==================== 自动安装缺失依赖 ====================
+import subprocess, sys as _sys, os as _os
+
+_REQUIRED_PACKAGES = [
+    "opencv-python-headless",
+    "ultralytics",
+    "mediapipe",
+    "streamlit",
+    "streamlit-webrtc",
+    "aiortc",
+    "Pillow",
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "seaborn",
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "pyyaml",
+    "tqdm",
+    "loguru",
+]
+
+def _ensure_packages():
+    missing = []
+    for pkg in _REQUIRED_PACKAGES:
+        name = pkg.lower().replace("-", "_").split("_")[0]
+        try:
+            __import__(name)
+        except ImportError:
+            missing.append(pkg)
+    if missing:
+        print(f"[auto-install] Installing missing packages: {', '.join(missing)}")
+        subprocess.check_call([
+            _sys.executable, "-m", "pip", "install",
+            "--quiet", "--no-warn-script-location",
+        ] + missing)
+        print("[auto-install] Done.")
+
+_ensure_packages()
+del _ensure_packages, _REQUIRED_PACKAGES
+
 """
 智能视觉系统 - 统一版
 
@@ -1300,4 +1342,3 @@ def show_about():
 
 if __name__ == '__main__':
     main()
-
