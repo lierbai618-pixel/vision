@@ -1,37 +1,3 @@
-# ==================== 自动安装缺失依赖 ====================
-import subprocess as _sp
-import sys as _sy
-
-def _ti(pkg, imp):
-    try:
-        __import__(imp)
-        return
-    except ImportError:
-        pass
-    try:
-        _sp.call([_sy.executable, "-m", "pip", "install", "--quiet", "--disable-pip-version-check", pkg],
-                 stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
-    except Exception:
-        pass
-
-_ti("opencv-python-headless", "cv2")
-_ti("ultralytics", "ultralytics")
-_ti("mediapipe", "mediapipe")
-_ti("Pillow", "PIL")
-_ti("numpy", "numpy")
-_ti("pandas", "pandas")
-_ti("matplotlib", "matplotlib")
-_ti("seaborn", "seaborn")
-_ti("streamlit", "streamlit")
-_ti("aiortc", "aiortc")
-_ti("fastapi", "fastapi")
-_ti("uvicorn", "uvicorn")
-_ti("python-multipart", "multipart")
-_ti("pyyaml", "yaml")
-_ti("tqdm", "tqdm")
-_ti("loguru", "loguru")
-del _ti, _sp, _sy
-
 """
 智能视觉系统 - 统一版
 
@@ -1334,5 +1300,4 @@ def show_about():
 
 if __name__ == '__main__':
     main()
-
 
