@@ -1,38 +1,40 @@
 """
-高可用模块
+高可用模块.
 
 提供限流器、熔断器、健康检查等高可用组件
 """
 
-import time
+from __future__ import annotations
+
 import threading
-from dataclasses import dataclass, field
-from typing import Callable, Dict, Optional, List
+import time
+from dataclasses import dataclass
+from typing import Callable
 
 
 @dataclass
 class RateLimitConfig:
-    """限流配置"""
+    """限流配置."""
+
     requests_per_second: float = 10.0
     burst_size: int = 20
 
 
 class RateLimiter:
-    """
-    令牌桶限流器
+    """令牌桶限流器.
 
     Args:
         config: 限流配置
     """
 
-    def __init__(self, config: Optional[RateLimitConfig] = None):
+    def __init__(self, config: RateLimitConfig | None = None):
         self.config = config or RateLimitConfig()
         self._tokens = self.config.burst_size
         self._last_refill = time.monotonic()
         self._lock = threading.Lock()
 
     def _refill(self):
-        """补充令牌"""
+        """补充令牌."""
         now = time.monotonic()
         elapsed = now - self._last_refill
         new_tokens = elapsed * self.config.requests_per_second
@@ -40,8 +42,7 @@ class RateLimiter:
         self._last_refill = now
 
     def acquire(self) -> bool:
-        """
-        尝试获取令牌
+        """尝试获取令牌.
 
         Returns:
             是否获取成功
@@ -55,7 +56,7 @@ class RateLimiter:
 
     @property
     def available_tokens(self) -> float:
-        """当前可用令牌数"""
+        """当前可用令牌数."""
         with self._lock:
             self._refill()
             return self._tokens
@@ -63,15 +64,15 @@ class RateLimiter:
 
 @dataclass
 class CircuitBreakerConfig:
-    """熔断器配置"""
+    """熔断器配置."""
+
     failure_threshold: int = 5
     recovery_timeout: float = 30.0
     half_open_max_requests: int = 3
 
 
 class CircuitBreaker:
-    """
-    熔断器
+    """熔断器.
 
     状态机：closed -> open -> half-open -> closed/open
 
@@ -79,9 +80,9 @@ class CircuitBreaker:
         config: 熔断器配置
     """
 
-    def __init__(self, config: Optional[CircuitBreakerConfig] = None):
+    def __init__(self, config: CircuitBreakerConfig | None = None):
         self.config = config or CircuitBreakerConfig()
-        self._state = 'closed'
+        self._state = "closed"
         self._failure_count = 0
         self._last_failure_time = 0
         self._half_open_requests = 0
@@ -89,18 +90,17 @@ class CircuitBreaker:
 
     @property
     def state(self) -> str:
-        """当前状态"""
+        """当前状态."""
         with self._lock:
-            if self._state == 'open':
+            if self._state == "open":
                 # 检查是否可以转为 half-open
                 if time.monotonic() - self._last_failure_time >= self.config.recovery_timeout:
-                    self._state = 'half-open'
+                    self._state = "half-open"
                     self._half_open_requests = 0
             return self._state
 
     def call(self, func: Callable, *args, **kwargs):
-        """
-        通过熔断器调用函数
+        """通过熔断器调用函数.
 
         Args:
             func: 要调用的函数
@@ -115,10 +115,10 @@ class CircuitBreaker:
         """
         current_state = self.state
 
-        if current_state == 'open':
+        if current_state == "open":
             raise RuntimeError("熔断器已打开，请求被拒绝")
 
-        if current_state == 'half-open':
+        if current_state == "half-open":
             with self._lock:
                 if self._half_open_requests >= self.config.half_open_max_requests:
                     raise RuntimeError("熔断器半开状态，请求已满")
@@ -128,46 +128,44 @@ class CircuitBreaker:
             result = func(*args, **kwargs)
             self._on_success()
             return result
-        except Exception as e:
+        except Exception:
             self._on_failure()
             raise
 
     def _on_success(self):
-        """调用成功"""
+        """调用成功."""
         with self._lock:
-            if self._state == 'half-open':
-                self._state = 'closed'
+            if self._state == "half-open":
+                self._state = "closed"
             self._failure_count = 0
 
     def _on_failure(self):
-        """调用失败"""
+        """调用失败."""
         with self._lock:
             self._failure_count += 1
             self._last_failure_time = time.monotonic()
             if self._failure_count >= self.config.failure_threshold:
-                self._state = 'open'
+                self._state = "open"
 
     def reset(self):
-        """重置熔断器"""
+        """重置熔断器."""
         with self._lock:
-            self._state = 'closed'
+            self._state = "closed"
             self._failure_count = 0
             self._half_open_requests = 0
 
 
 class HealthChecker:
-    """
-    健康检查器
+    """健康检查器.
 
     注册多个检查项，统一检查健康状态
     """
 
     def __init__(self):
-        self._checks: Dict[str, Callable[[], bool]] = {}
+        self._checks: dict[str, Callable[[], bool]] = {}
 
     def register(self, name: str, check_func: Callable[[], bool]):
-        """
-        注册健康检查项
+        """注册健康检查项.
 
         Args:
             name: 检查项名称
@@ -175,9 +173,8 @@ class HealthChecker:
         """
         self._checks[name] = check_func
 
-    def check(self) -> Dict:
-        """
-        执行所有健康检查
+    def check(self) -> dict:
+        """执行所有健康检查.
 
         Returns:
             健康检查结果，包含 status 和 details
@@ -188,20 +185,17 @@ class HealthChecker:
         for name, check_func in self._checks.items():
             try:
                 healthy = check_func()
-                details[name] = {'healthy': healthy}
+                details[name] = {"healthy": healthy}
                 if not healthy:
                     all_healthy = False
             except Exception as e:
-                details[name] = {'healthy': False, 'error': str(e)}
+                details[name] = {"healthy": False, "error": str(e)}
                 all_healthy = False
 
-        return {
-            'status': 'healthy' if all_healthy else 'degraded',
-            'details': details
-        }
+        return {"status": "healthy" if all_healthy else "degraded", "details": details}
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # 测试代码
     print("高可用模块测试")
 
@@ -223,6 +217,6 @@ if __name__ == '__main__':
 
     # 健康检查测试
     checker = HealthChecker()
-    checker.register('test', lambda: True)
+    checker.register("test", lambda: True)
     result = checker.check()
     print(f"健康检查: {result['status']}")
