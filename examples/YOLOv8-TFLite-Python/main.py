@@ -8,7 +8,6 @@ from pathlib import Path
 import cv2
 import numpy as np
 import yaml
-
 from ultralytics.utils import ASSETS
 
 try:
