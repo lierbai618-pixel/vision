@@ -2,7 +2,7 @@
 
 streamlit==1.41.1
 ultralytics==8.3.78
-opencv-python-headless==4.10.0.84
+opencv-python-headless==4.13.0.92
 mediapipe==0.10.18
 Pillow==11.0.0
 numpy==2.1.3
