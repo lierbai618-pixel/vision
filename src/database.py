@@ -1,19 +1,19 @@
 """
-数据库模块
+数据库模块.
 
 使用 SQLite 存储检测记录和任务信息
 """
 
-import sqlite3
+from __future__ import annotations
+
 import json
+import sqlite3
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Any
 
 
 class Database:
-    """
-    SQLite 数据库管理器
+    """SQLite 数据库管理器.
 
     支持检测记录和任务的存储、查询
 
@@ -21,9 +21,8 @@ class Database:
         db_path: 数据库文件路径
     """
 
-    def __init__(self, db_path: str = 'vision_system.db'):
-        """
-        初始化数据库
+    def __init__(self, db_path: str = "vision_system.db"):
+        """初始化数据库.
 
         Args:
             db_path: 数据库文件路径
@@ -32,9 +31,9 @@ class Database:
         self._init_db()
 
     def _init_db(self):
-        """初始化数据库表"""
+        """初始化数据库表."""
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute('''
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS detections (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id TEXT NOT NULL,
@@ -43,8 +42,8 @@ class Database:
                     result TEXT,
                     created_at REAL DEFAULT (strftime('%s', 'now'))
                 )
-            ''')
-            conn.execute('''
+            """)
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS tasks (
                     task_id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
@@ -55,18 +54,13 @@ class Database:
                     created_at REAL DEFAULT (strftime('%s', 'now')),
                     updated_at REAL DEFAULT (strftime('%s', 'now'))
                 )
-            ''')
+            """)
             conn.commit()
 
     def insert_detection(
-        self,
-        user_id: str,
-        detection_type: str,
-        image_path: str = '',
-        result: Optional[Dict] = None
+        self, user_id: str, detection_type: str, image_path: str = "", result: dict | None = None
     ) -> int:
-        """
-        插入检测记录
+        """插入检测记录.
 
         Args:
             user_id: 用户 ID
@@ -77,23 +71,19 @@ class Database:
         Returns:
             记录 ID
         """
-        result_json = json.dumps(result, ensure_ascii=False) if result else '{}'
+        result_json = json.dumps(result, ensure_ascii=False) if result else "{}"
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
-                'INSERT INTO detections (user_id, detection_type, image_path, result) VALUES (?, ?, ?, ?)',
-                (user_id, detection_type, image_path, result_json)
+                "INSERT INTO detections (user_id, detection_type, image_path, result) VALUES (?, ?, ?, ?)",
+                (user_id, detection_type, image_path, result_json),
             )
             conn.commit()
             return cursor.lastrowid
 
     def get_detections(
-        self,
-        user_id: Optional[str] = None,
-        detection_type: Optional[str] = None,
-        limit: int = 100
-    ) -> List[Dict]:
-        """
-        获取检测记录
+        self, user_id: str | None = None, detection_type: str | None = None, limit: int = 100
+    ) -> list[dict]:
+        """获取检测记录.
 
         Args:
             user_id: 用户 ID，None 表示所有用户
@@ -103,17 +93,17 @@ class Database:
         Returns:
             检测记录列表
         """
-        query = 'SELECT * FROM detections WHERE 1=1'
+        query = "SELECT * FROM detections WHERE 1=1"
         params = []
 
         if user_id:
-            query += ' AND user_id = ?'
+            query += " AND user_id = ?"
             params.append(user_id)
         if detection_type:
-            query += ' AND detection_type = ?'
+            query += " AND detection_type = ?"
             params.append(detection_type)
 
-        query += ' ORDER BY created_at DESC LIMIT ?'
+        query += " ORDER BY created_at DESC LIMIT ?"
         params.append(limit)
 
         with sqlite3.connect(self.db_path) as conn:
@@ -123,24 +113,17 @@ class Database:
         results = []
         for row in rows:
             record = dict(row)
-            if record.get('result'):
+            if record.get("result"):
                 try:
-                    record['result'] = json.loads(record['result'])
+                    record["result"] = json.loads(record["result"])
                 except json.JSONDecodeError:
                     pass
             results.append(record)
 
         return results
 
-    def insert_task(
-        self,
-        task_id: str,
-        user_id: str,
-        task_type: str,
-        input_data: Optional[Dict] = None
-    ) -> str:
-        """
-        插入任务
+    def insert_task(self, task_id: str, user_id: str, task_type: str, input_data: dict | None = None) -> str:
+        """插入任务.
 
         Args:
             task_id: 任务 ID
@@ -151,23 +134,17 @@ class Database:
         Returns:
             任务 ID
         """
-        input_json = json.dumps(input_data, ensure_ascii=False) if input_data else '{}'
+        input_json = json.dumps(input_data, ensure_ascii=False) if input_data else "{}"
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                'INSERT INTO tasks (task_id, user_id, task_type, input_data) VALUES (?, ?, ?, ?)',
-                (task_id, user_id, task_type, input_json)
+                "INSERT INTO tasks (task_id, user_id, task_type, input_data) VALUES (?, ?, ?, ?)",
+                (task_id, user_id, task_type, input_json),
             )
             conn.commit()
         return task_id
 
-    def update_task(
-        self,
-        task_id: str,
-        status: str,
-        output_data: Optional[Dict] = None
-    ) -> None:
-        """
-        更新任务状态
+    def update_task(self, task_id: str, status: str, output_data: dict | None = None) -> None:
+        """更新任务状态.
 
         Args:
             task_id: 任务 ID
@@ -177,14 +154,13 @@ class Database:
         output_json = json.dumps(output_data, ensure_ascii=False) if output_data else None
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                'UPDATE tasks SET status = ?, output_data = ?, updated_at = ? WHERE task_id = ?',
-                (status, output_json, time.time(), task_id)
+                "UPDATE tasks SET status = ?, output_data = ?, updated_at = ? WHERE task_id = ?",
+                (status, output_json, time.time(), task_id),
             )
             conn.commit()
 
-    def get_task(self, task_id: str) -> Optional[Dict]:
-        """
-        获取任务信息
+    def get_task(self, task_id: str) -> dict | None:
+        """获取任务信息.
 
         Args:
             task_id: 任务 ID
@@ -194,15 +170,13 @@ class Database:
         """
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                'SELECT * FROM tasks WHERE task_id = ?', (task_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM tasks WHERE task_id = ?", (task_id,)).fetchone()
 
         if row is None:
             return None
 
         task = dict(row)
-        for key in ['input_data', 'output_data']:
+        for key in ["input_data", "output_data"]:
             if task.get(key):
                 try:
                     task[key] = json.loads(task[key])
@@ -210,14 +184,8 @@ class Database:
                     pass
         return task
 
-    def get_tasks(
-        self,
-        user_id: Optional[str] = None,
-        status: Optional[str] = None,
-        limit: int = 100
-    ) -> List[Dict]:
-        """
-        获取任务列表
+    def get_tasks(self, user_id: str | None = None, status: str | None = None, limit: int = 100) -> list[dict]:
+        """获取任务列表.
 
         Args:
             user_id: 用户 ID
@@ -227,17 +195,17 @@ class Database:
         Returns:
             任务列表
         """
-        query = 'SELECT * FROM tasks WHERE 1=1'
+        query = "SELECT * FROM tasks WHERE 1=1"
         params = []
 
         if user_id:
-            query += ' AND user_id = ?'
+            query += " AND user_id = ?"
             params.append(user_id)
         if status:
-            query += ' AND status = ?'
+            query += " AND status = ?"
             params.append(status)
 
-        query += ' ORDER BY created_at DESC LIMIT ?'
+        query += " ORDER BY created_at DESC LIMIT ?"
         params.append(limit)
 
         with sqlite3.connect(self.db_path) as conn:
@@ -247,7 +215,7 @@ class Database:
         results = []
         for row in rows:
             task = dict(row)
-            for key in ['input_data', 'output_data']:
+            for key in ["input_data", "output_data"]:
                 if task.get(key):
                     try:
                         task[key] = json.loads(task[key])
@@ -258,8 +226,7 @@ class Database:
         return results
 
     def delete_detection(self, detection_id: int) -> bool:
-        """
-        删除检测记录
+        """删除检测记录.
 
         Args:
             detection_id: 记录 ID
@@ -268,13 +235,12 @@ class Database:
             是否删除成功
         """
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute('DELETE FROM detections WHERE id = ?', (detection_id,))
+            cursor = conn.execute("DELETE FROM detections WHERE id = ?", (detection_id,))
             conn.commit()
             return cursor.rowcount > 0
 
-    def get_statistics(self, user_id: Optional[str] = None) -> Dict:
-        """
-        获取统计信息
+    def get_statistics(self, user_id: str | None = None) -> dict:
+        """获取统计信息.
 
         Args:
             user_id: 用户 ID
@@ -284,51 +250,41 @@ class Database:
         """
         with sqlite3.connect(self.db_path) as conn:
             if user_id:
-                det_count = conn.execute(
-                    'SELECT COUNT(*) FROM detections WHERE user_id = ?', (user_id,)
-                ).fetchone()[0]
-                task_count = conn.execute(
-                    'SELECT COUNT(*) FROM tasks WHERE user_id = ?', (user_id,)
-                ).fetchone()[0]
+                det_count = conn.execute("SELECT COUNT(*) FROM detections WHERE user_id = ?", (user_id,)).fetchone()[0]
+                task_count = conn.execute("SELECT COUNT(*) FROM tasks WHERE user_id = ?", (user_id,)).fetchone()[0]
             else:
-                det_count = conn.execute('SELECT COUNT(*) FROM detections').fetchone()[0]
-                task_count = conn.execute('SELECT COUNT(*) FROM tasks').fetchone()[0]
+                det_count = conn.execute("SELECT COUNT(*) FROM detections").fetchone()[0]
+                task_count = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
 
-        return {
-            'total_detections': det_count,
-            'total_tasks': task_count
-        }
+        return {"total_detections": det_count, "total_tasks": task_count}
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # 测试代码
     print("数据库模块测试")
-    db = Database('test_temp.db')
+    db = Database("test_temp.db")
 
     # 插入检测记录
     record_id = db.insert_detection(
-        user_id='test_user',
-        detection_type='object',
-        image_path='test.jpg',
-        result={'count': 3, 'classes': ['person', 'car', 'dog']}
+        user_id="test_user",
+        detection_type="object",
+        image_path="test.jpg",
+        result={"count": 3, "classes": ["person", "car", "dog"]},
     )
     print(f"插入检测记录: ID={record_id}")
 
     # 查询检测记录
-    detections = db.get_detections(user_id='test_user')
+    detections = db.get_detections(user_id="test_user")
     print(f"查询到 {len(detections)} 条记录")
 
     # 插入任务
     task_id = db.insert_task(
-        task_id='test_task_001',
-        user_id='test_user',
-        task_type='detection',
-        input_data={'image_path': 'test.jpg'}
+        task_id="test_task_001", user_id="test_user", task_type="detection", input_data={"image_path": "test.jpg"}
     )
     print(f"插入任务: {task_id}")
 
     # 更新任务
-    db.update_task(task_id, 'completed', output_data={'count': 3})
+    db.update_task(task_id, "completed", output_data={"count": 3})
 
     # 查询任务
     task = db.get_task(task_id)
@@ -339,4 +295,4 @@ if __name__ == '__main__':
     print(f"统计: {stats}")
 
     # 清理
-    Path('test_temp.db').unlink(missing_ok=True)
+    Path("test_temp.db").unlink(missing_ok=True)
