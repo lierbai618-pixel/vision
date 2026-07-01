@@ -1,6 +1,6 @@
 # 智能视觉系统 - Docker Compose配置
 
-version: '3.8'
+version: "3.8"
 
 services:
   # Streamlit Web界面（集成所有功能）
