@@ -1,18 +1,19 @@
 """
-人脸检测模块
+人脸检测模块.
 
 使用 YOLOv8 或 MediaPipe 进行人脸检测
 """
 
+from __future__ import annotations
+
+from pathlib import Path
+
 import cv2
 import numpy as np
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 
 class FaceDetector:
-    """
-    人脸检测器
+    """人脸检测器.
 
     支持 YOLOv8 专用人脸模型和 MediaPipe 回退方案
 
@@ -21,9 +22,8 @@ class FaceDetector:
         model: YOLOv8 人脸检测模型
     """
 
-    def __init__(self, min_detection_confidence: float = 0.5, model_path: Optional[str] = None):
-        """
-        初始化人脸检测器
+    def __init__(self, min_detection_confidence: float = 0.5, model_path: str | None = None):
+        """初始化人脸检测器.
 
         Args:
             min_detection_confidence: 最小检测置信度，范围 0-1
@@ -34,7 +34,7 @@ class FaceDetector:
         self._model_path = model_path
 
     def _load_model(self):
-        """懒加载人脸检测模型"""
+        """懒加载人脸检测模型."""
         if self.model is not None:
             return
 
@@ -61,9 +61,8 @@ class FaceDetector:
         print("警告: 未找到专用人脸模型，使用 yolov8n.pt 回退")
         self.model = YOLO("yolov8n.pt")
 
-    def detect_faces(self, image_path: str) -> Dict:
-        """
-        检测图片中的人脸
+    def detect_faces(self, image_path: str) -> dict:
+        """检测图片中的人脸.
 
         Args:
             image_path: 图片路径
@@ -89,23 +88,17 @@ class FaceDetector:
             for box in results[0].boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 conf = float(box.conf[0])
-                face_locations.append({
-                    'x': x1,
-                    'y': y1,
-                    'width': x2 - x1,
-                    'height': y2 - y1
-                })
+                face_locations.append({"x": x1, "y": y1, "width": x2 - x1, "height": y2 - y1})
                 face_confidences.append(conf)
 
         return {
-            'face_count': len(face_locations),
-            'face_locations': face_locations,
-            'face_confidences': face_confidences
+            "face_count": len(face_locations),
+            "face_locations": face_locations,
+            "face_confidences": face_confidences,
         }
 
-    def detect_faces_in_frame(self, frame: np.ndarray) -> List[Tuple[int, int, int, int, float]]:
-        """
-        检测视频帧中的人脸（用于实时检测）
+    def detect_faces_in_frame(self, frame: np.ndarray) -> list[tuple[int, int, int, int, float]]:
+        """检测视频帧中的人脸（用于实时检测）.
 
         Args:
             frame: BGR 格式的视频帧
@@ -126,9 +119,8 @@ class FaceDetector:
 
         return faces
 
-    def detect_faces_batch(self, image_paths: List[str]) -> List[Dict]:
-        """
-        批量检测多张图片的人脸
+    def detect_faces_batch(self, image_paths: list[str]) -> list[dict]:
+        """批量检测多张图片的人脸.
 
         Args:
             image_paths: 图片路径列表
@@ -140,23 +132,18 @@ class FaceDetector:
         for path in image_paths:
             try:
                 result = self.detect_faces(path)
-                result['image_path'] = path
+                result["image_path"] = path
                 results.append(result)
             except Exception as e:
-                results.append({
-                    'image_path': path,
-                    'face_count': 0,
-                    'face_locations': [],
-                    'face_confidences': [],
-                    'error': str(e)
-                })
+                results.append(
+                    {"image_path": path, "face_count": 0, "face_locations": [], "face_confidences": [], "error": str(e)}
+                )
         return results
 
 
 # 便捷函数
-def detect_faces_in_image(image_path: str, confidence: float = 0.5) -> Dict:
-    """
-    快速检测单张图片的人脸
+def detect_faces_in_image(image_path: str, confidence: float = 0.5) -> dict:
+    """快速检测单张图片的人脸.
 
     Args:
         image_path: 图片路径
@@ -169,7 +156,7 @@ def detect_faces_in_image(image_path: str, confidence: float = 0.5) -> Dict:
     return detector.detect_faces(image_path)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # 测试代码
     print("人脸检测器测试")
     detector = FaceDetector()
@@ -178,7 +165,7 @@ if __name__ == '__main__':
     try:
         results = detector.detect_faces(test_image)
         print(f"检测到 {results['face_count']} 张人脸")
-        for i, (loc, conf) in enumerate(zip(results['face_locations'], results['face_confidences'])):
-            print(f"  人脸 {i+1}: 位置({loc['x']},{loc['y']}), 置信度 {conf:.2%}")
+        for i, (loc, conf) in enumerate(zip(results["face_locations"], results["face_confidences"])):
+            print(f"  人脸 {i + 1}: 位置({loc['x']},{loc['y']}), 置信度 {conf:.2%}")
     except Exception as e:
         print(f"测试失败: {e}")
