@@ -1,20 +1,22 @@
 """
-智能视觉系统 - 统一版
+智能视觉系统 - 统一版.
 
 集成目标检测、人脸识别、手势识别、口罩检测、实时监测、批量处理的完整智能分析平台
 """
 
-import streamlit as st
+import os
+import tempfile
+import threading
+import time
+from datetime import datetime
+from pathlib import Path
+
 # components import removed - using st.markdown instead
 import cv2
 import numpy as np
+import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
-from pathlib import Path
-import tempfile
-import os
-import time
-import threading
-from datetime import datetime, timedelta
+
 # HTTPServer removed - using st.image directly
 
 
@@ -22,34 +24,42 @@ from datetime import datetime, timedelta
 
 _FONT_CACHE_FILE = Path("cache/.font_path_cache.txt")
 
+
 def _find_cjk_font() -> str:
-    """查找中文字体（优先使用项目自带字体）"""
+    """查找中文字体（优先使用项目自带字体）."""
     bundled = Path(__file__).parent / "fonts" / "simhei.ttf"
     if bundled.exists():
         return str(bundled)
     candidates = [
-        r'C:\Windows\Fonts\simhei.ttf', r'C:\Windows\Fonts\msyh.ttc',
-        r'C:\Windows\Fonts\simsun.ttc',
-        '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
-        '/System/Library/Fonts/PingFang.ttc',
+        r"C:\Windows\Fonts\simhei.ttf",
+        r"C:\Windows\Fonts\msyh.ttc",
+        r"C:\Windows\Fonts\simsun.ttc",
+        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+        "/System/Library/Fonts/PingFang.ttc",
     ]
     for p in candidates:
         if Path(p).exists():
             return p
-    return ''
+    return ""
+
+
 _CJK_FONT_PATH = _find_cjk_font()
 _CJK_FONT_CACHE = {}
+
 
 def _get_font(font_size):
     if font_size not in _CJK_FONT_CACHE:
         try:
-            _CJK_FONT_CACHE[font_size] = ImageFont.truetype(_CJK_FONT_PATH, font_size) if _CJK_FONT_PATH else ImageFont.load_default()
+            _CJK_FONT_CACHE[font_size] = (
+                ImageFont.truetype(_CJK_FONT_PATH, font_size) if _CJK_FONT_PATH else ImageFont.load_default()
+            )
         except Exception:
             _CJK_FONT_CACHE[font_size] = ImageFont.load_default()
     return _CJK_FONT_CACHE[font_size]
 
+
 def batch_draw_texts(img, text_items):
-    """批量绘制中文文字，只做一次 BGR->PIL->BGR 转换"""
+    """批量绘制中文文字，只做一次 BGR->PIL->BGR 转换."""
     if not text_items:
         return img
     pil_img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
@@ -58,49 +68,60 @@ def batch_draw_texts(img, text_items):
         draw.text(position, text, font=_get_font(font_size), fill=color_bgr[::-1])
     return cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
 
-def put_chinese_text(img, text, position, font_size=20, color=(0,255,0), thickness=2):
+
+def put_chinese_text(img, text, position, font_size=20, color=(0, 255, 0), thickness=2):
     return batch_draw_texts(img, [(text, position, font_size, color)])
 
 
 # ==================== 实时监测（st.image 直接渲染，无需 MJPEG） ====================
 
+
 class StreamServer:
-    """摄像头抓帧 + 检测，通过 st.image 直接显示"""
+    """摄像头抓帧 + 检测，通过 st.image 直接显示."""
 
     def __init__(self):
         self._cap = None
         self._running = False
         self._frame_rgb = None
         self._lock = threading.Lock()
-        self._stats = {'fps': 0, 'objects': 0, 'faces': 0, 'masks': 0, 'frame_count': 0, 'start_time': 0}
+        self._stats = {"fps": 0, "objects": 0, "faces": 0, "masks": 0, "frame_count": 0, "start_time": 0}
         self._alerts = []
         self._last_ss_time = 0
         self._last_det_ss_time = 0
         self._det_model = None
         self._face_model = None
         self._mask_model = None
-        self._cached_detections = {'text_items': []}
-        self._cached_counts = {'obj': 0, 'face': 0, 'mask': 0}
+        self._cached_detections = {"text_items": []}
+        self._cached_counts = {"obj": 0, "face": 0, "mask": 0}
         self._frame_idx = 0
         self._skip_frames = 2
         self._config = {
-            'camera_id': 0, 'width': 640, 'height': 480,
-            'enable_object': True, 'enable_face': True, 'enable_mask': False,
-            'model_option': 'models/yolov8m.pt', 'conf_threshold': 0.5,
-            'enable_alerts': True, 'alert_threshold': 3,
-            'enable_auto_ss': False, 'ss_interval': 10, 'ss_on_detect': False,
+            "camera_id": 0,
+            "width": 640,
+            "height": 480,
+            "enable_object": True,
+            "enable_face": True,
+            "enable_mask": False,
+            "model_option": "models/yolov8m.pt",
+            "conf_threshold": 0.5,
+            "enable_alerts": True,
+            "alert_threshold": 3,
+            "enable_auto_ss": False,
+            "ss_interval": 10,
+            "ss_on_detect": False,
         }
 
     def preload_models(self):
-        """预加载模型，避免第一帧卡顿"""
+        """预加载模型，避免第一帧卡顿."""
         from ultralytics import YOLO
+
         cfg = self._config
-        if cfg['enable_object'] and self._det_model is None:
-            self._det_model = YOLO(cfg['model_option'])
-        if cfg['enable_face'] and self._face_model is None:
+        if cfg["enable_object"] and self._det_model is None:
+            self._det_model = YOLO(cfg["model_option"])
+        if cfg["enable_face"] and self._face_model is None:
             fp = Path(__file__).parent / "models" / "yolov8n-face.pt"
             self._face_model = YOLO(str(fp) if fp.exists() else "models/yolov8m.pt")
-        if cfg['enable_mask'] and self._mask_model is None:
+        if cfg["enable_mask"] and self._mask_model is None:
             self._mask_model = YOLO(safe_model_path("models/mask_detector.pt", "mask_detector.pt"))
 
     def start(self, **kwargs):
@@ -113,19 +134,19 @@ class StreamServer:
         self.preload_models()
         cap = None
         for backend in [cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY]:
-            cap = cv2.VideoCapture(cfg['camera_id'], backend)
+            cap = cv2.VideoCapture(cfg["camera_id"], backend)
             if cap.isOpened():
                 break
             cap.release()
         if not cap or not cap.isOpened():
             raise RuntimeError(f"无法打开摄像头 {cfg['camera_id']}")
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg['width'])
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg['height'])
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg["width"])
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg["height"])
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         self._cap = cap
         self._running = True
-        self._stats['start_time'] = time.time()
-        self._stats['frame_count'] = 0
+        self._stats["start_time"] = time.time()
+        self._stats["frame_count"] = 0
 
     def stop(self):
         self._running = False
@@ -137,7 +158,7 @@ class StreamServer:
             self._cap = None
 
     def read_and_detect(self):
-        """读取一帧并执行检测，返回 RGB 图像用于 st.image"""
+        """读取一帧并执行检测，返回 RGB 图像用于 st.image."""
         if not self._running or not self._cap or not self._cap.isOpened():
             return None
         ret, frame = self._cap.read()
@@ -155,12 +176,21 @@ class StreamServer:
             mask_count = 0
             text_items = []
 
-            if cfg['enable_object']:
+            if cfg["enable_object"]:
                 try:
                     if self._det_model is None:
                         from ultralytics import YOLO
-                        self._det_model = YOLO(cfg['model_option'])
-                    results = self._det_model(frame, conf=cfg['conf_threshold'], iou=0.5, agnostic_nms=False, imgsz=960, augment=True, verbose=False)
+
+                        self._det_model = YOLO(cfg["model_option"])
+                    results = self._det_model(
+                        frame,
+                        conf=cfg["conf_threshold"],
+                        iou=0.5,
+                        agnostic_nms=False,
+                        imgsz=960,
+                        augment=True,
+                        verbose=False,
+                    )
                     if results[0].boxes is not None:
                         obj_count = len(results[0].boxes)
                         names = results[0].names
@@ -169,7 +199,7 @@ class StreamServer:
                             c = float(box.conf[0])
                             cls = int(box.cls[0])
                             # 判断是自定义模型还是通用模型
-                            if "custom" in cfg['model_option']:
+                            if "custom" in cfg["model_option"]:
                                 name = cn_name(names[cls])
                             else:
                                 name = cn_name(names[cls])
@@ -183,10 +213,11 @@ class StreamServer:
                 except Exception:
                     pass
 
-            if cfg['enable_face']:
+            if cfg["enable_face"]:
                 try:
                     if self._face_model is None:
                         from ultralytics import YOLO
+
                         fp = Path(__file__).parent / "models" / "yolov8n-face.pt"
                         self._face_model = YOLO(str(fp) if fp.exists() else "models/yolov8m.pt")
                     f_res = self._face_model(frame, conf=0.5, imgsz=960, augment=True, verbose=False)
@@ -200,12 +231,21 @@ class StreamServer:
                 except Exception:
                     pass
 
-            if cfg['enable_mask']:
+            if cfg["enable_mask"]:
                 try:
                     if self._mask_model is None:
                         from ultralytics import YOLO
+
                         self._mask_model = YOLO(safe_model_path("models/mask_detector.pt", "mask_detector.pt"))
-                    m_res = self._mask_model(frame, conf=cfg['conf_threshold'], iou=0.5, agnostic_nms=False, imgsz=960, augment=True, verbose=False)
+                    m_res = self._mask_model(
+                        frame,
+                        conf=cfg["conf_threshold"],
+                        iou=0.5,
+                        agnostic_nms=False,
+                        imgsz=960,
+                        augment=True,
+                        verbose=False,
+                    )
                     if m_res[0].boxes is not None:
                         mask_count = len(m_res[0].boxes)
                         for box in m_res[0].boxes:
@@ -213,43 +253,52 @@ class StreamServer:
                             c = float(box.conf[0])
                             cls = int(box.cls[0])
                             info = MASK_CLASSES.get(cls, {"name": "?", "color": (128, 128, 128)})
-                            cv2.rectangle(frame, (x1, y1), (x2, y2), info['color'], 2)
-                            text_items.append((f"{info['name']}:{c:.0%}", (x1, max(y1 - 18, 0)), 18, info['color']))
+                            cv2.rectangle(frame, (x1, y1), (x2, y2), info["color"], 2)
+                            text_items.append((f"{info['name']}:{c:.0%}", (x1, max(y1 - 18, 0)), 18, info["color"]))
                 except Exception:
                     pass
 
-            self._cached_counts = {'obj': obj_count, 'face': face_count, 'mask': mask_count}
-            self._cached_detections['text_items'] = text_items
+            self._cached_counts = {"obj": obj_count, "face": face_count, "mask": mask_count}
+            self._cached_detections["text_items"] = text_items
         else:
-            text_items = self._cached_detections.get('text_items', [])
-            obj_count = self._cached_counts['obj']
-            face_count = self._cached_counts['face']
-            mask_count = self._cached_counts['mask']
+            text_items = self._cached_detections.get("text_items", [])
+            obj_count = self._cached_counts["obj"]
+            face_count = self._cached_counts["face"]
+            mask_count = self._cached_counts["mask"]
 
         if text_items:
             frame = batch_draw_texts(frame, text_items)
 
         fps = 1.0 / max(time.time() - t0, 0.001)
         cv2.putText(frame, f"FPS:{fps:.0f}", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2, cv2.LINE_AA)
-        cv2.putText(frame, f"Obj:{obj_count} Face:{face_count} Mask:{mask_count}", (10, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
+        cv2.putText(
+            frame,
+            f"Obj:{obj_count} Face:{face_count} Mask:{mask_count}",
+            (10, 48),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 255, 0),
+            2,
+            cv2.LINE_AA,
+        )
 
-        self._stats['fps'] = fps
-        self._stats['objects'] = obj_count
-        self._stats['faces'] = face_count
-        self._stats['masks'] = mask_count
-        self._stats['frame_count'] += 1
+        self._stats["fps"] = fps
+        self._stats["objects"] = obj_count
+        self._stats["faces"] = face_count
+        self._stats["masks"] = mask_count
+        self._stats["frame_count"] += 1
 
-        if cfg['enable_alerts'] and obj_count >= cfg['alert_threshold']:
-            a = {'time': datetime.now().strftime("%H:%M:%S"), 'msg': f"检测到 {obj_count} 个目标"}
+        if cfg["enable_alerts"] and obj_count >= cfg["alert_threshold"]:
+            a = {"time": datetime.now().strftime("%H:%M:%S"), "msg": f"检测到 {obj_count} 个目标"}
             if a not in self._alerts:
                 self._alerts.append(a)
 
         now = time.time()
-        if cfg['enable_auto_ss'] and (now - self._last_ss_time) >= cfg['ss_interval']:
+        if cfg["enable_auto_ss"] and (now - self._last_ss_time) >= cfg["ss_interval"]:
             self._last_ss_time = now
             Path("screenshots").mkdir(exist_ok=True)
             cv2.imwrite(f"screenshots/auto_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg", frame)
-        if cfg['ss_on_detect'] and obj_count > 0 and (now - self._last_det_ss_time) >= 3:
+        if cfg["ss_on_detect"] and obj_count > 0 and (now - self._last_det_ss_time) >= 3:
             self._last_det_ss_time = now
             Path("screenshots").mkdir(exist_ok=True)
             cv2.imwrite(f"screenshots/detect_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg", frame)
@@ -287,14 +336,10 @@ class StreamServer:
 
 # ==================== 页面配置 ====================
 
-st.set_page_config(
-    page_title="智能视觉系统",
-    page_icon="👁️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="智能视觉系统", page_icon="👁️", layout="wide", initial_sidebar_state="expanded")
 
-st.markdown("""
+st.markdown(
+    """
 <style>
 .main-header {
     font-size: 2.5rem; font-weight: bold;
@@ -304,16 +349,20 @@ st.markdown("""
 }
 .sub-header { font-size: 1.1rem; color: #888; text-align: center; margin-bottom: 1.5rem; }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 # ==================== 安全路径（MediaPipe不支持中文路径） ====================
 
+
 def _ensure_safe_model_dir():
-    """延迟创建安全模型目录（只在需要时创建）"""
+    """延迟创建安全模型目录（只在需要时创建）."""
     p = Path("C:/temp/models")
     p.mkdir(parents=True, exist_ok=True)
     return p
+
 
 SAFE_MODEL_DIR = None  # 延迟初始化
 
@@ -321,15 +370,15 @@ SAFE_MODEL_DIR = None  # 延迟初始化
 import subprocess
 import sys as _sys
 
+
 def _check_mediapipe_safe():
-    """在子进程中测试 MediaPipe 是否安全可用（结果缓存24小时）"""
+    """在子进程中测试 MediaPipe 是否安全可用（结果缓存24小时）."""
     _cache = Path("cache/.mediapipe_safe")
     try:
         if _cache.exists() and (time.time() - _cache.stat().st_mtime < 86400):
             return _cache.read_text().strip() == "OK"
         result = subprocess.run(
-            [_sys.executable, "-c", "import mediapipe; print('OK')"],
-            capture_output=True, text=True, timeout=10
+            [_sys.executable, "-c", "import mediapipe; print('OK')"], capture_output=True, text=True, timeout=10
         )
         ok = result.returncode == 0 and "OK" in result.stdout
         _cache.parent.mkdir(parents=True, exist_ok=True)
@@ -338,15 +387,17 @@ def _check_mediapipe_safe():
     except Exception:
         return _cache.exists() and _cache.read_text().strip() == "OK"
 
+
 MEDIAPIPE_SAFE = _check_mediapipe_safe()
 
 
 def safe_model_path(project_relative_path: str, safe_name: str) -> str:
-    """将模型文件复制到无中文路径的目录，返回安全路径"""
+    """将模型文件复制到无中文路径的目录，返回安全路径."""
     global SAFE_MODEL_DIR
     if SAFE_MODEL_DIR is None:
         SAFE_MODEL_DIR = _ensure_safe_model_dir()
     import shutil
+
     safe = SAFE_MODEL_DIR / safe_name
     if not safe.exists():
         src = Path(project_relative_path)
@@ -365,34 +416,91 @@ MASK_CLASSES = {
 
 # COCO 80类中文映射
 COCO_CN = {
-    "person": "人", "bicycle": "自行车", "car": "汽车", "motorcycle": "摩托车",
-    "airplane": "飞机", "bus": "公交车", "train": "火车", "truck": "卡车",
-    "boat": "船", "traffic light": "红绿灯", "fire hydrant": "消防栓",
-    "stop sign": "停车标志", "parking meter": "停车计时器", "bench": "长椅",
-    "bird": "鸟", "cat": "猫", "dog": "狗", "horse": "马", "sheep": "羊",
-    "cow": "牛", "elephant": "大象", "bear": "熊", "zebra": "斑马",
-    "giraffe": "长颈鹿", "backpack": "背包", "umbrella": "雨伞",
-    "handbag": "手提包", "tie": "领带", "suitcase": "行李箱",
-    "frisbee": "飞盘", "skis": "滑雪板", "snowboard": "单板滑雪",
-    "sports ball": "运动球", "kite": "风筝", "baseball bat": "棒球棒",
-    "baseball glove": "棒球手套", "skateboard": "滑板", "surfboard": "冲浪板",
-    "tennis racket": "网球拍", "bottle": "瓶子", "wine glass": "酒杯",
-    "cup": "杯子", "fork": "叉子", "knife": "刀", "spoon": "勺子",
-    "bowl": "碗", "banana": "香蕉", "apple": "苹果", "sandwich": "三明治",
-    "orange": "橙子", "broccoli": "西兰花", "carrot": "胡萝卜",
-    "hot dog": "热狗", "pizza": "披萨", "donut": "甜甜圈", "cake": "蛋糕",
-    "chair": "椅子", "couch": "沙发", "potted plant": "盆栽",
-    "bed": "床", "dining table": "餐桌", "toilet": "马桶", "tv": "电视",
-    "laptop": "笔记本电脑", "mouse": "鼠标", "remote": "遥控器",
-    "keyboard": "键盘", "cell phone": "手机", "microwave": "微波炉",
-    "oven": "烤箱", "toaster": "烤面包机", "sink": "水槽",
-    "refrigerator": "冰箱", "book": "书", "clock": "时钟", "vase": "花瓶",
-    "scissors": "剪刀", "teddy bear": "泰迪熊", "hair drier": "吹风机",
+    "person": "人",
+    "bicycle": "自行车",
+    "car": "汽车",
+    "motorcycle": "摩托车",
+    "airplane": "飞机",
+    "bus": "公交车",
+    "train": "火车",
+    "truck": "卡车",
+    "boat": "船",
+    "traffic light": "红绿灯",
+    "fire hydrant": "消防栓",
+    "stop sign": "停车标志",
+    "parking meter": "停车计时器",
+    "bench": "长椅",
+    "bird": "鸟",
+    "cat": "猫",
+    "dog": "狗",
+    "horse": "马",
+    "sheep": "羊",
+    "cow": "牛",
+    "elephant": "大象",
+    "bear": "熊",
+    "zebra": "斑马",
+    "giraffe": "长颈鹿",
+    "backpack": "背包",
+    "umbrella": "雨伞",
+    "handbag": "手提包",
+    "tie": "领带",
+    "suitcase": "行李箱",
+    "frisbee": "飞盘",
+    "skis": "滑雪板",
+    "snowboard": "单板滑雪",
+    "sports ball": "运动球",
+    "kite": "风筝",
+    "baseball bat": "棒球棒",
+    "baseball glove": "棒球手套",
+    "skateboard": "滑板",
+    "surfboard": "冲浪板",
+    "tennis racket": "网球拍",
+    "bottle": "瓶子",
+    "wine glass": "酒杯",
+    "cup": "杯子",
+    "fork": "叉子",
+    "knife": "刀",
+    "spoon": "勺子",
+    "bowl": "碗",
+    "banana": "香蕉",
+    "apple": "苹果",
+    "sandwich": "三明治",
+    "orange": "橙子",
+    "broccoli": "西兰花",
+    "carrot": "胡萝卜",
+    "hot dog": "热狗",
+    "pizza": "披萨",
+    "donut": "甜甜圈",
+    "cake": "蛋糕",
+    "chair": "椅子",
+    "couch": "沙发",
+    "potted plant": "盆栽",
+    "bed": "床",
+    "dining table": "餐桌",
+    "toilet": "马桶",
+    "tv": "电视",
+    "laptop": "笔记本电脑",
+    "mouse": "鼠标",
+    "remote": "遥控器",
+    "keyboard": "键盘",
+    "cell phone": "手机",
+    "microwave": "微波炉",
+    "oven": "烤箱",
+    "toaster": "烤面包机",
+    "sink": "水槽",
+    "refrigerator": "冰箱",
+    "book": "书",
+    "clock": "时钟",
+    "vase": "花瓶",
+    "scissors": "剪刀",
+    "teddy bear": "泰迪熊",
+    "hair drier": "吹风机",
     "toothbrush": "牙刷",
 }
 
+
 def cn_name(en_name: str) -> str:
-    """英文类别名转中文，支持COCO和自定义类别"""
+    """英文类别名转中文，支持COCO和自定义类别."""
     return COCO_CN.get(en_name, CUSTOM_ITEMS_CN.get(en_name, en_name))
 
 
@@ -412,65 +520,73 @@ CUSTOM_ITEMS_CN = {
 
 
 def custom_cn_name(en_name: str) -> str:
-    """自定义类别名转中文"""
+    """自定义类别名转中文."""
     return CUSTOM_ITEMS_CN.get(en_name, en_name)
 
 
 # ==================== 全局状态初始化 ====================
 
+
 def init_session_state():
     defaults = {
-        'monitoring': False,
-        'recording': False,
-        'detection_history': [],
-        'screenshots': [],
-        'alerts': [],
-        'current_frame': None,
-        'frame_count': 0,
-        'start_time': 0,
-        'last_screenshot_time': 0,
-        'last_detect_screenshot_time': 0,
+        "monitoring": False,
+        "recording": False,
+        "detection_history": [],
+        "screenshots": [],
+        "alerts": [],
+        "current_frame": None,
+        "frame_count": 0,
+        "start_time": 0,
+        "last_screenshot_time": 0,
+        "last_detect_screenshot_time": 0,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
-    if '_stream_server' not in st.session_state:
-        st.session_state['_stream_server'] = StreamServer()
+    if "_stream_server" not in st.session_state:
+        st.session_state["_stream_server"] = StreamServer()
 
 
 # ==================== 检测器加载（全部使用安全路径） ====================
 
+
 @st.cache_resource
-def load_object_detector(model_path='models/yolov8m.pt', conf=0.5):
+def load_object_detector(model_path="models/yolov8m.pt", conf=0.5):
     from src.detector import ObjectDetector
+
     return ObjectDetector(model_path=model_path, conf_threshold=conf)
 
 
 @st.cache_resource
 def load_yolo_face_model():
-    """加载YOLOv8专用人脸检测模型"""
+    """加载YOLOv8专用人脸检测模型."""
     from ultralytics import YOLO
+
     fp = Path(__file__).parent / "models" / "yolov8n-face.pt"
-    if not fp.exists(): fp = Path("C:/temp/models/yolov8n-face.pt")
-    if not fp.exists(): fp = Path("models/yolov8m.pt")
+    if not fp.exists():
+        fp = Path("C:/temp/models/yolov8n-face.pt")
+    if not fp.exists():
+        fp = Path("models/yolov8m.pt")
     return YOLO(str(fp))
 
 
 @st.cache_resource
 def load_mask_detector():
     from ultralytics import YOLO
+
     p = safe_model_path("models/mask_detector.pt", "mask_detector.pt")
     return YOLO(p)
 
 
 @st.cache_resource
 def load_gesture_detector():
-    """加载手势识别器（MediaPipe HandLandmarker）"""
+    """加载手势识别器（MediaPipe HandLandmarker）."""
     if not MEDIAPIPE_SAFE:
         return None
     try:
         from mediapipe.tasks import python
         from mediapipe.tasks.python import vision
+
         model_path = safe_model_path("models/hand_landmarker.task", "hand_landmarker.task")
         base = python.BaseOptions(model_asset_path=model_path)
         opts = vision.HandLandmarkerOptions(
@@ -487,7 +603,7 @@ def load_gesture_detector():
 
 
 def classify_gesture(landmarks):
-    """根据手部关键点简单判断手势"""
+    """根据手部关键点简单判断手势."""
     # 指尖和指间关节的y坐标比较
     tips = [4, 8, 12, 16, 20]  # 拇指、食指、中指、无名指、小指的指尖
     pips = [3, 6, 10, 14, 18]  # 对应的指间关节
@@ -498,36 +614,53 @@ def classify_gesture(landmarks):
         else:
             fingers_up.append(landmarks[tip].y < landmarks[pip].y)
     count = sum(fingers_up)
-    if count == 0: return "拳头"
-    if count == 5: return "张开手掌"
-    if count == 1 and fingers_up[1]: return "食指指向前方"
-    if count == 2 and fingers_up[1] and fingers_up[2]: return "耶/剪刀手"
-    if count == 1 and fingers_up[0]: return "竖起拇指"
+    if count == 0:
+        return "拳头"
+    if count == 5:
+        return "张开手掌"
+    if count == 1 and fingers_up[1]:
+        return "食指指向前方"
+    if count == 2 and fingers_up[1] and fingers_up[2]:
+        return "耶/剪刀手"
+    if count == 1 and fingers_up[0]:
+        return "竖起拇指"
     return f"{count}根手指"
 
 
 # ==================== 主界面 ====================
 
+
 def main():
     init_session_state()
 
     st.markdown('<div class="main-header">👁️ 智能视觉系统</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">YOLOv8 · MediaPipe · 目标检测 · 人脸识别 · 手势识别 · 口罩检测 · 实时监测</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="sub-header">YOLOv8 · MediaPipe · 目标检测 · 人脸识别 · 手势识别 · 口罩检测 · 实时监测</div>',
+        unsafe_allow_html=True,
+    )
     st.markdown("---")
 
     with st.sidebar:
         st.markdown("## 🎯 功能导航")
-        app_mode = st.selectbox("选择功能", [
-            "📹 实时监测", "📷 目标检测", "👤 人脸识别", "✋ 手势识别",
-            "😷 口罩检测", "🧠 模型训练", "ℹ️ 关于"
-        ], index=0, key="app_mode")
+        app_mode = st.selectbox(
+            "选择功能",
+            ["📹 实时监测", "📷 目标检测", "👤 人脸识别", "✋ 手势识别", "😷 口罩检测", "🧠 模型训练", "ℹ️ 关于"],
+            index=0,
+            key="app_mode",
+        )
 
         st.markdown("---")
         st.markdown("## ⚙️ 全局设置")
-        model_option = st.selectbox("检测模型", [
-            "models/yolov8m.pt", "models/custom_items.pt", "yolov8l.pt", "yolov8x.pt", "yolov8s.pt", "yolov8n.pt"
-        ], index=0, key="model_option", help="yolov8m.pt 通用80类检测，custom_items.pt 专用10类物品检测")
-        conf_threshold = st.slider("置信度阈值", 0.0, 1.0, 0.5, 0.05, key="conf_threshold", help="降低阈值可检测更多目标，提高阈值可减少误检")
+        model_option = st.selectbox(
+            "检测模型",
+            ["models/yolov8m.pt", "models/custom_items.pt", "yolov8l.pt", "yolov8x.pt", "yolov8s.pt", "yolov8n.pt"],
+            index=0,
+            key="model_option",
+            help="yolov8m.pt 通用80类检测，custom_items.pt 专用10类物品检测",
+        )
+        conf_threshold = st.slider(
+            "置信度阈值", 0.0, 1.0, 0.5, 0.05, key="conf_threshold", help="降低阈值可检测更多目标，提高阈值可减少误检"
+        )
 
     route = {
         "📹 实时监测": lambda: show_realtime_monitor(model_option, conf_threshold),
@@ -543,44 +676,47 @@ def main():
 
 # ==================== 手机摄像头实时检测 ====================
 
+
 def show_mobile_camera(model_option, conf_threshold):
-    """使用浏览器摄像头检测（支持手机）"""
+    """使用浏览器摄像头检测（支持手机）."""
     st.markdown("### \U0001f4f1 \u624b\u673a\u6444\u50cf\u5934\u68c0\u6d4b")
 
     # \u68c0\u6d4b\u9009\u9879
     c1, c2, c3 = st.columns(3)
-    with c1: enable_object = st.checkbox("\U0001f3af \u76ee\u6807\u68c0\u6d4b", True, key="mob_obj")
-    with c2: enable_face = st.checkbox("\U0001f464 \u4eba\u8138\u8bc6\u522b", True, key="mob_face")
-    with c3: enable_mask = st.checkbox("\U0001f637 \u53e3\u7f69\u68c0\u6d4b", False, key="mob_mask")
+    with c1:
+        enable_object = st.checkbox("\U0001f3af \u76ee\u6807\u68c0\u6d4b", True, key="mob_obj")
+    with c2:
+        enable_face = st.checkbox("\U0001f464 \u4eba\u8138\u8bc6\u522b", True, key="mob_face")
+    with c3:
+        enable_mask = st.checkbox("\U0001f637 \u53e3\u7f69\u68c0\u6d4b", False, key="mob_mask")
 
     # \u9ed8\u8ba4\u4f7f\u7528\u62cd\u7167\u6a21\u5f0f\uff08\u6700\u53ef\u9760\uff09
     show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_face, enable_mask)
 
 
-
 @st.cache_resource
 def _get_cached_model(path):
-    """缓存YOLO模型，避免重复加载"""
+    """缓存YOLO模型，避免重复加载."""
     from ultralytics import YOLO
+
     return YOLO(path)
 
 
 def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_face, enable_mask):
-    """拍照模式（支持连续拍照）"""
-
+    """拍照模式（支持连续拍照）."""
     # 初始化 session state
-    if 'detection_results' not in st.session_state:
-        st.session_state['detection_results'] = None
-    if 'detection_count' not in st.session_state:
-        st.session_state['detection_count'] = 0
+    if "detection_results" not in st.session_state:
+        st.session_state["detection_results"] = None
+    if "detection_count" not in st.session_state:
+        st.session_state["detection_count"] = 0
 
     # 拍照区域
     camera_photo = st.camera_input("📸 点击拍照", key="camera_input")
 
     if camera_photo is not None:
         # 清除旧结果，释放内存
-        if st.session_state['detection_results'] is not None:
-            st.session_state['detection_results'] = None
+        if st.session_state["detection_results"] is not None:
+            st.session_state["detection_results"] = None
 
         # 处理新照片
         image = Image.open(camera_photo)
@@ -589,10 +725,11 @@ def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_f
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("**原图**")
-            st.image(image, width='stretch')
+            st.image(image, width="stretch")
 
         # 转换为 OpenCV 格式（不保存到磁盘）
         import io
+
         img_array = np.array(image)
         img = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
 
@@ -605,7 +742,9 @@ def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_f
         if enable_object:
             try:
                 det_model = _get_cached_model(model_option)
-                results = det_model(img, conf=conf_threshold, iou=0.5, agnostic_nms=False, imgsz=960, augment=True, verbose=False)
+                results = det_model(
+                    img, conf=conf_threshold, iou=0.5, agnostic_nms=False, imgsz=960, augment=True, verbose=False
+                )
                 if results[0].boxes is not None:
                     obj_count = len(results[0].boxes)
                     names = results[0].names
@@ -647,8 +786,8 @@ def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_f
                         c = float(box.conf[0])
                         cls = int(box.cls[0])
                         info = MASK_CLASSES.get(cls, {"name": "?", "color": (128, 128, 128)})
-                        cv2.rectangle(img, (x1, y1), (x2, y2), info['color'], 2)
-                        text_items.append((f"{info['name']}:{c:.0%}", (x1, max(y1 - 18, 0)), 20, info['color']))
+                        cv2.rectangle(img, (x1, y1), (x2, y2), info["color"], 2)
+                        text_items.append((f"{info['name']}:{c:.0%}", (x1, max(y1 - 18, 0)), 20, info["color"]))
             except Exception as e:
                 st.warning(f"口罩检测失败: {e}")
 
@@ -660,16 +799,19 @@ def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_f
         result_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         with c2:
             st.markdown("**检测结果**")
-            st.image(result_img, width='stretch')
+            st.image(result_img, width="stretch")
 
         # 统计信息
         c1, c2, c3 = st.columns(3)
-        with c1: st.metric("🎯 目标", obj_count)
-        with c2: st.metric("👤 人脸", face_count)
-        with c3: st.metric("😷 口罩", mask_count)
+        with c1:
+            st.metric("🎯 目标", obj_count)
+        with c2:
+            st.metric("👤 人脸", face_count)
+        with c3:
+            st.metric("😷 口罩", mask_count)
 
         # 更新检测计数
-        st.session_state['detection_count'] += 1
+        st.session_state["detection_count"] += 1
 
         # 操作按钮
         st.markdown("---")
@@ -679,19 +821,19 @@ def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_f
             # 下载检测结果
             result_pil = Image.fromarray(result_img)
             buf = io.BytesIO()
-            result_pil.save(buf, format='JPEG')
+            result_pil.save(buf, format="JPEG")
             st.download_button(
                 label="💾 下载结果",
                 data=buf.getvalue(),
                 file_name=f"detection_{st.session_state['detection_count']}.jpg",
                 mime="image/jpeg",
-                key=f"download_{st.session_state['detection_count']}"
+                key=f"download_{st.session_state['detection_count']}",
             )
 
         with c2:
             # 清除结果
             if st.button("🗑️ 清除结果", key="clear_result"):
-                st.session_state['detection_results'] = None
+                st.session_state["detection_results"] = None
                 st.rerun()
 
         with c3:
@@ -706,17 +848,18 @@ def show_camera_photo_mode(model_option, conf_threshold, enable_object, enable_f
         st.info("👆 点击上方按钮打开摄像头拍照")
 
         # 显示历史统计
-        if st.session_state['detection_count'] > 0:
+        if st.session_state["detection_count"] > 0:
             st.markdown(f"📊 已检测 {st.session_state['detection_count']} 次")
 
 
 # ==================== 实时监测（st.image 直接渲染） ====================
 
+
 def show_realtime_monitor(model_option, conf_threshold):
     st.markdown("## 📹 实时监测")
     st.markdown("摄像头实时检测 · 截图 · 告警")
 
-    srv = st.session_state['_stream_server']
+    srv = st.session_state["_stream_server"]
 
     # 摄像头模式选择（用户自由选择）
     camera_mode = st.radio("摄像头模式", ["🖥️ 本地摄像头", "📱 手机摄像头"], horizontal=True, key="cam_mode")
@@ -728,50 +871,75 @@ def show_realtime_monitor(model_option, conf_threshold):
 
     with st.expander("⚙️ 监测配置", expanded=not srv._running):
         c1, c2, c3, c4 = st.columns(4)
-        with c1: camera_id = st.selectbox("摄像头", [0, 1, 2], key="cam_id")
-        with c2: enable_object = st.checkbox("目标检测", True, key="en_obj")
-        with c3: enable_face = st.checkbox("人脸识别", True, key="en_face")
-        with c4: enable_mask = st.checkbox("口罩检测", False, key="en_mask")
-        with c1: enable_plate = st.checkbox("车牌检测", False, key="en_plate", help="需要训练好的车牌检测模型")
+        with c1:
+            camera_id = st.selectbox("摄像头", [0, 1, 2], key="cam_id")
+        with c2:
+            enable_object = st.checkbox("目标检测", True, key="en_obj")
+        with c3:
+            enable_face = st.checkbox("人脸识别", True, key="en_face")
+        with c4:
+            enable_mask = st.checkbox("口罩检测", False, key="en_mask")
+        with c1:
+            st.checkbox("车牌检测", False, key="en_plate", help="需要训练好的车牌检测模型")
 
         c1, c2, c3, c4 = st.columns(4)
-        with c1: resolution = st.selectbox("分辨率", ["640x480", "1280x720", "320x240"], key="res")
-        with c2: enable_alerts = st.checkbox("启用告警", True, key="en_alert")
-        with c3: alert_threshold = st.slider("告警阈值", 1, 10, 3, key="alert_th")
-        with c4: enable_auto_ss = st.checkbox("自动截图", False, key="en_auto_ss")
+        with c1:
+            resolution = st.selectbox("分辨率", ["640x480", "1280x720", "320x240"], key="res")
+        with c2:
+            enable_alerts = st.checkbox("启用告警", True, key="en_alert")
+        with c3:
+            alert_threshold = st.slider("告警阈值", 1, 10, 3, key="alert_th")
+        with c4:
+            enable_auto_ss = st.checkbox("自动截图", False, key="en_auto_ss")
 
         c1, c2, c3 = st.columns(3)
-        with c1: ss_interval = st.slider("自动截图间隔(秒)", 5, 60, 10, key="ss_int")
-        with c2: ss_on_detect = st.checkbox("检测到目标时截图", False, key="ss_on_det")
-        with c3: skip_frames = st.slider("跳帧数(越大越快)", 0, 5, 2, key="skip_fr", help="每N帧检测1帧，0=每帧检测")
+        with c1:
+            ss_interval = st.slider("自动截图间隔(秒)", 5, 60, 10, key="ss_int")
+        with c2:
+            ss_on_detect = st.checkbox("检测到目标时截图", False, key="ss_on_det")
+        with c3:
+            skip_frames = st.slider("跳帧数(越大越快)", 0, 5, 2, key="skip_fr", help="每N帧检测1帧，0=每帧检测")
 
-        width, height = map(int, resolution.split('x'))
+        width, height = map(int, resolution.split("x"))
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        if st.button("🚀 启动监测", width='stretch', type="primary", disabled=srv._running):
+        if st.button("🚀 启动监测", width="stretch", type="primary", disabled=srv._running):
             try:
                 srv._skip_frames = skip_frames
-                srv.start(camera_id=camera_id, width=width, height=height,
-                    enable_object=enable_object, enable_face=enable_face, enable_mask=enable_mask,
-                    model_option=model_option, conf_threshold=conf_threshold,
-                    enable_alerts=enable_alerts, alert_threshold=alert_threshold,
-                    enable_auto_ss=enable_auto_ss, ss_interval=ss_interval, ss_on_detect=ss_on_detect)
-                st.toast("✅ 监测已启动"); st.rerun()
+                srv.start(
+                    camera_id=camera_id,
+                    width=width,
+                    height=height,
+                    enable_object=enable_object,
+                    enable_face=enable_face,
+                    enable_mask=enable_mask,
+                    model_option=model_option,
+                    conf_threshold=conf_threshold,
+                    enable_alerts=enable_alerts,
+                    alert_threshold=alert_threshold,
+                    enable_auto_ss=enable_auto_ss,
+                    ss_interval=ss_interval,
+                    ss_on_detect=ss_on_detect,
+                )
+                st.toast("✅ 监测已启动")
+                st.rerun()
             except Exception as e:
                 st.error(f"❌ 启动失败: {e}")
     with c2:
-        if st.button("⏹️ 停止监测", width='stretch', disabled=not srv._running):
-            srv.stop(); st.toast("⏹️ 已停止"); st.rerun()
+        if st.button("⏹️ 停止监测", width="stretch", disabled=not srv._running):
+            srv.stop()
+            st.toast("⏹️ 已停止")
+            st.rerun()
     with c3:
-        if st.button("📸 手动截图", width='stretch'):
+        if st.button("📸 手动截图", width="stretch"):
             sp = srv.screenshot()
             st.toast(f"📸 已保存: {sp}" if sp else "⚠️ 没有可用画面")
     with c4:
-        if st.button("🗑️ 清除历史", width='stretch'):
+        if st.button("🗑️ 清除历史", width="stretch"):
             srv.clear_alerts()
-            st.session_state['detection_history'] = []
-            st.session_state['screenshots'] = []
+            st.session_state["detection_history"] = []
+            st.session_state["screenshots"] = []
 
     if srv._running:
         # st.image 直接渲染循环
@@ -784,9 +952,11 @@ def show_realtime_monitor(model_option, conf_threshold):
             if frame is not None:
                 frame_placeholder.image(frame, channels="RGB", use_container_width=True)
             stats = srv.get_stats()
-            total_t = time.time() - stats['start_time'] if stats['start_time'] else 1
-            avg_fps = stats['frame_count'] / total_t if total_t > 0 else 0
-            stats_placeholder.caption(f"📊 FPS: {stats['fps']:.0f} | 平均: {avg_fps:.0f} | 帧数: {stats['frame_count']} | 目标: {stats['objects']} | 人脸: {stats['faces']} | 口罩: {stats.get('masks', 0)}")
+            total_t = time.time() - stats["start_time"] if stats["start_time"] else 1
+            avg_fps = stats["frame_count"] / total_t if total_t > 0 else 0
+            stats_placeholder.caption(
+                f"📊 FPS: {stats['fps']:.0f} | 平均: {avg_fps:.0f} | 帧数: {stats['frame_count']} | 目标: {stats['objects']} | 人脸: {stats['faces']} | 口罩: {stats.get('masks', 0)}"
+            )
             alerts = srv.get_alerts()[-5:]
             if alerts:
                 alert_placeholder.markdown("".join(f"🚨 **{a['time']}** - {a['msg']}  " for a in alerts))
@@ -797,73 +967,89 @@ def show_realtime_monitor(model_option, conf_threshold):
 
 def _show_monitor_statistics():
     st.markdown("## 📊 统计分析")
-    history = st.session_state['detection_history']
+    history = st.session_state["detection_history"]
     if not history:
-        st.info("暂无统计数据"); return
-    st.line_chart([h['fps'] for h in history[-50:]])
+        st.info("暂无统计数据")
+        return
+    st.line_chart([h["fps"] for h in history[-50:]])
     c1, c2 = st.columns(2)
-    with c1: st.metric("平均目标数", f"{sum(h['objects'] for h in history)/len(history):.1f}")
-    with c2: st.metric("平均人脸数", f"{sum(h['faces'] for h in history)/len(history):.1f}")
+    with c1:
+        st.metric("平均目标数", f"{sum(h['objects'] for h in history) / len(history):.1f}")
+    with c2:
+        st.metric("平均人脸数", f"{sum(h['faces'] for h in history) / len(history):.1f}")
     st.dataframe(history[-20:])
 
 
 def _show_monitor_screenshots():
     st.markdown("## 🖼️ 截图管理")
-    screenshots = st.session_state['screenshots']
+    screenshots = st.session_state["screenshots"]
     if not screenshots:
-        st.info("暂无截图，点击「📸 手动截图」或启用自动截图"); return
+        st.info("暂无截图，点击「📸 手动截图」或启用自动截图")
+        return
     c1, c2 = st.columns(2)
-    with c1: st.metric("截图总数", len(screenshots))
+    with c1:
+        st.metric("截图总数", len(screenshots))
     with c2:
         if st.button("🗑️ 删除所有截图"):
             for s in screenshots:
-                if Path(s['path']).exists(): os.remove(s['path'])
-            st.session_state['screenshots'] = []; st.rerun()
+                if Path(s["path"]).exists():
+                    os.remove(s["path"])
+            st.session_state["screenshots"] = []
+            st.rerun()
     for i, ss in enumerate(screenshots):
-        with st.expander(f"📸 {i+1} - {ss['time']}", expanded=False):
+        with st.expander(f"📸 {i + 1} - {ss['time']}", expanded=False):
             c1, c2, c3 = st.columns([3, 2, 1])
             with c1:
-                if Path(ss['path']).exists(): st.image(ss['path'], width='stretch')
+                if Path(ss["path"]).exists():
+                    st.image(ss["path"], width="stretch")
             with c2:
-                d = ss['detections']
-                note = d.get('note', '')
+                d = ss["detections"]
+                note = d.get("note", "")
                 if note:
                     st.write(f"📝 {note}")
                 else:
-                    st.write(f"🎯 目标: {d.get('objects',0)} | 👤 人脸: {d.get('faces',0)}")
-                st.code(ss['path'])
-                if Path(ss['path']).exists():
-                    with open(ss['path'], 'rb') as f:
+                    st.write(f"🎯 目标: {d.get('objects', 0)} | 👤 人脸: {d.get('faces', 0)}")
+                st.code(ss["path"])
+                if Path(ss["path"]).exists():
+                    with open(ss["path"], "rb") as f:
                         st.download_button("📥 下载", f.read(), f"ss_{ss['time']}.jpg", "image/jpeg", key=f"dl_{i}")
             with c3:
-                if st.button(f"🗑️", key=f"del_{i}"):
-                    if Path(ss['path']).exists(): os.remove(ss['path'])
-                    st.session_state['screenshots'].pop(i); st.rerun()
+                if st.button("🗑️", key=f"del_{i}"):
+                    if Path(ss["path"]).exists():
+                        os.remove(ss["path"])
+                    st.session_state["screenshots"].pop(i)
+                    st.rerun()
 
 
 def _show_monitor_alerts():
     st.markdown("## 🚨 告警记录")
-    alerts = st.session_state['alerts']
-    if not alerts: st.info("暂无告警"); return
+    alerts = st.session_state["alerts"]
+    if not alerts:
+        st.info("暂无告警")
+        return
     st.metric("告警总数", len(alerts))
     for a in reversed(alerts[-20:]):
-        color = "#f5576c" if a['level'] == 'warning' else "#ffa726"
-        st.markdown(f'<div style="background:{color};padding:10px;border-radius:5px;color:white"><strong>{a["time"]}</strong> - {a["message"]}</div>', unsafe_allow_html=True)
+        color = "#f5576c" if a["level"] == "warning" else "#ffa726"
+        st.markdown(
+            f'<div style="background:{color};padding:10px;border-radius:5px;color:white"><strong>{a["time"]}</strong> - {a["message"]}</div>',
+            unsafe_allow_html=True,
+        )
 
 
 # ==================== 临时文件工具 ====================
 
-def _save_temp_image(image, suffix='.jpg'):
-    """将 PIL Image 保存到临时文件，确保完全写入后返回路径"""
+
+def _save_temp_image(image, suffix=".jpg"):
+    """将 PIL Image 保存到临时文件，确保完全写入后返回路径."""
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        image.save(tmp, format='JPEG')
+        image.save(tmp, format="JPEG")
         tmp.flush()
         os.fsync(tmp.fileno())
         return tmp.name
 
 
 def _safe_unlink(path):
-    """安全删除临时文件"""
+    """安全删除临时文件."""
     try:
         if path and os.path.exists(path):
             os.unlink(path)
@@ -873,30 +1059,44 @@ def _safe_unlink(path):
 
 # ==================== 目标检测 ====================
 
+
 def show_object_detection(model_option, conf_threshold):
     st.markdown("## 📷 目标检测")
     st.markdown("上传一张或多张图片进行检测，支持批量处理")
     det = load_object_detector(model_option, conf_threshold)
-    files = st.file_uploader("📤 上传图片（支持多张批量处理）", type=['jpg','jpeg','png','bmp'], accept_multiple_files=True, key='det_up')
+    files = st.file_uploader(
+        "📤 上传图片（支持多张批量处理）", type=["jpg", "jpeg", "png", "bmp"], accept_multiple_files=True, key="det_up"
+    )
     if files:
         for f in files:
             st.markdown(f"---\n**📷 {f.name}**")
             image = Image.open(f).convert("RGB")
             c1, c2 = st.columns(2)
-            with c1: st.markdown("原图"); st.image(image, width='stretch')
+            with c1:
+                st.markdown("原图")
+                st.image(image, width="stretch")
             with st.spinner(f"检测 {f.name}..."):
-                tp = _save_temp_image(image, '.jpg')
+                tp = _save_temp_image(image, ".jpg")
                 try:
                     result_img = cv2.imread(tp)
                     det_model = det.model
-                    raw = det_model(result_img, conf=conf_threshold, iou=0.4, agnostic_nms=False, imgsz=960, augment=True, verbose=False)
+                    raw = det_model(
+                        result_img,
+                        conf=conf_threshold,
+                        iou=0.4,
+                        agnostic_nms=False,
+                        imgsz=960,
+                        augment=True,
+                        verbose=False,
+                    )
                     cn_names = []
                     confs = []
                     if raw[0].boxes is not None:
                         text_items = []
                         for box in raw[0].boxes:
-                            x1,y1,x2,y2 = map(int, box.xyxy[0])
-                            conf = float(box.conf[0]); cls = int(box.cls[0])
+                            x1, y1, x2, y2 = map(int, box.xyxy[0])
+                            conf = float(box.conf[0])
+                            cls = int(box.cls[0])
                             name = cn_name(det_model.names[cls])
                             cn_names.append(name)
                             confs.append(conf)
@@ -905,19 +1105,24 @@ def show_object_detection(model_option, conf_threshold):
                                 color = (0, 255, 0)
                             else:
                                 color = (255, 0, 0)
-                            cv2.rectangle(result_img, (x1,y1), (x2,y2), color, 2)
-                            text_items.append((f"{name} {conf:.0%}", (x1, max(y1-18,0)), 20, color))
+                            cv2.rectangle(result_img, (x1, y1), (x2, y2), color, 2)
+                            text_items.append((f"{name} {conf:.0%}", (x1, max(y1 - 18, 0)), 20, color))
                         result_img = batch_draw_texts(result_img, text_items)
                     ri = cv2.cvtColor(result_img, cv2.COLOR_BGR2RGB)
                 finally:
                     _safe_unlink(tp)
-            with c2: st.markdown("结果"); st.image(ri, width='stretch')
-            c1,c2,c3 = st.columns(3)
-            with c1: st.metric("数量", len(cn_names))
             with c2:
-                if cn_names: st.metric("主要类别", max(set(cn_names), key=cn_names.count))
+                st.markdown("结果")
+                st.image(ri, width="stretch")
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.metric("数量", len(cn_names))
+            with c2:
+                if cn_names:
+                    st.metric("主要类别", max(set(cn_names), key=cn_names.count))
             with c3:
-                if confs: st.metric("置信度", f"{np.mean(confs):.0%}")
+                if confs:
+                    st.metric("置信度", f"{np.mean(confs):.0%}")
             if cn_names:
                 for i, (n, c) in enumerate(zip(cn_names, confs)):
                     st.write(f"- **{n}**: {c:.0%}")
@@ -925,8 +1130,9 @@ def show_object_detection(model_option, conf_threshold):
 
 # ==================== 人脸识别 ====================
 
+
 def _detect_faces(img, conf=0.5):
-    """YOLOv8专用人脸检测"""
+    """YOLOv8专用人脸检测."""
     model = load_yolo_face_model()
     faces = []
     results = model(img, conf=conf, verbose=False)
@@ -934,41 +1140,48 @@ def _detect_faces(img, conf=0.5):
         for box in results[0].boxes:
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             c = float(box.conf[0])
-            faces.append((x1, y1, x2-x1, y2-y1, c))
+            faces.append((x1, y1, x2 - x1, y2 - y1, c))
     return faces
 
 
 def show_face_detection():
     st.markdown("## 👤 人脸识别（YOLOv8专用模型）")
     st.markdown("使用WIDER FACE数据集训练的YOLOv8人脸检测模型，精度远超MediaPipe")
-    files = st.file_uploader("📤 上传图片（支持多张批量处理）", type=['jpg','jpeg','png','bmp'], accept_multiple_files=True, key='face_up')
+    files = st.file_uploader(
+        "📤 上传图片（支持多张批量处理）", type=["jpg", "jpeg", "png", "bmp"], accept_multiple_files=True, key="face_up"
+    )
     if files:
         for f in files:
             st.markdown(f"---\n**📷 {f.name}**")
             image = Image.open(f).convert("RGB")
             c1, c2 = st.columns(2)
-            with c1: st.markdown("原图"); st.image(image, width='stretch')
+            with c1:
+                st.markdown("原图")
+                st.image(image, width="stretch")
             with st.spinner(f"检测 {f.name}..."):
-                tp = _save_temp_image(image, '.jpg')
+                tp = _save_temp_image(image, ".jpg")
                 try:
                     img = cv2.imread(tp)
                     faces = _detect_faces(img, conf=0.5)
                     face_texts = []
-                    for (x, y, w, h, conf) in faces:
-                        cv2.rectangle(img, (x, y), (x+w, y+h), (255, 0, 0), 2)
-                        face_texts.append((f"人脸 {conf:.0%}", (x, max(y-18,0)), 20, (255,0,0)))
+                    for x, y, w, h, conf in faces:
+                        cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2)
+                        face_texts.append((f"人脸 {conf:.0%}", (x, max(y - 18, 0)), 20, (255, 0, 0)))
                     img = batch_draw_texts(img, face_texts)
                     ri = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                 finally:
                     _safe_unlink(tp)
             with c2:
                 st.markdown("结果")
-                if faces: st.image(ri, width='stretch')
-                else: st.warning("未检测到人脸")
+                if faces:
+                    st.image(ri, width="stretch")
+                else:
+                    st.warning("未检测到人脸")
             st.metric("人脸数量", len(faces))
 
 
 # ==================== 手势识别 ====================
+
 
 def show_gesture_detection():
     st.markdown("## ✋ 手势识别")
@@ -977,20 +1190,28 @@ def show_gesture_detection():
         st.info("建议：尝试降级 MediaPipe 版本 `pip install mediapipe==0.10.14` 或使用其他 Python 环境。")
         return
     st.markdown("上传一张或多张图片，支持批量处理")
-    files = st.file_uploader("📤 上传图片（支持多张批量处理）", type=['jpg','jpeg','png','bmp'], accept_multiple_files=True, key='gesture_up')
+    files = st.file_uploader(
+        "📤 上传图片（支持多张批量处理）",
+        type=["jpg", "jpeg", "png", "bmp"],
+        accept_multiple_files=True,
+        key="gesture_up",
+    )
     if files:
         for f in files:
             st.markdown(f"---\n**📷 {f.name}**")
             image = Image.open(f).convert("RGB")
             c1, c2 = st.columns(2)
-            with c1: st.markdown("原图"); st.image(image, width='stretch')
+            with c1:
+                st.markdown("原图")
+                st.image(image, width="stretch")
             with st.spinner(f"检测 {f.name}..."):
-                tp = _save_temp_image(image, '.jpg')
+                tp = _save_temp_image(image, ".jpg")
                 try:
                     gd = load_gesture_detector()
                     img = cv2.imread(tp)
                     rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                     import mediapipe as mp
+
                     mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
                     result = gd.detect(mp_img)
                     gestures = []
@@ -1000,65 +1221,89 @@ def show_gesture_detection():
                             gesture = classify_gesture(hand_lms)
                             gestures.append(gesture)
                             for lm in hand_lms:
-                                cv2.circle(img, (int(lm.x*w), int(lm.y*h)), 4, (0,0,255), -1)
-                            for (a,b) in mp.solutions.hands.HAND_CONNECTIONS:
-                                ax,ay = int(hand_lms[a].x*w), int(hand_lms[a].y*h)
-                                bx,by = int(hand_lms[b].x*w), int(hand_lms[b].y*h)
-                                cv2.line(img, (ax,ay), (bx,by), (0,255,255), 2)
+                                cv2.circle(img, (int(lm.x * w), int(lm.y * h)), 4, (0, 0, 255), -1)
+                            for a, b in mp.solutions.hands.HAND_CONNECTIONS:
+                                ax, ay = int(hand_lms[a].x * w), int(hand_lms[a].y * h)
+                                bx, by = int(hand_lms[b].x * w), int(hand_lms[b].y * h)
+                                cv2.line(img, (ax, ay), (bx, by), (0, 255, 255), 2)
                             wrist = hand_lms[0]
-                            cv2.putText(img, gesture, (int(wrist.x*w)-20, int(wrist.y*h)-20), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,255), 2)
+                            cv2.putText(
+                                img,
+                                gesture,
+                                (int(wrist.x * w) - 20, int(wrist.y * h) - 20),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.8,
+                                (0, 255, 255),
+                                2,
+                            )
                     ri = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                 finally:
                     _safe_unlink(tp)
-            with c2: st.markdown("结果"); st.image(ri, width='stretch')
+            with c2:
+                st.markdown("结果")
+                st.image(ri, width="stretch")
             st.metric("手部数量", len(gestures))
             for i, g in enumerate(gestures):
-                st.write(f"- **手 {i+1}**: {g}")
+                st.write(f"- **手 {i + 1}**: {g}")
 
 
 # ==================== 口罩检测 ====================
+
 
 def show_mask_detection(conf_threshold):
     st.markdown("## 😷 口罩检测")
     st.markdown("上传一张或多张图片，支持批量处理")
     det = load_mask_detector()
-    files = st.file_uploader("📤 上传图片（支持多张批量处理）", type=['jpg','jpeg','png','bmp'], accept_multiple_files=True, key='mask_up')
+    files = st.file_uploader(
+        "📤 上传图片（支持多张批量处理）", type=["jpg", "jpeg", "png", "bmp"], accept_multiple_files=True, key="mask_up"
+    )
     if files:
         for f in files:
             st.markdown(f"---\n**📷 {f.name}**")
             image = Image.open(f).convert("RGB")
             c1, c2 = st.columns(2)
-            with c1: st.markdown("原图"); st.image(image, width='stretch')
+            with c1:
+                st.markdown("原图")
+                st.image(image, width="stretch")
             with st.spinner(f"检测 {f.name}..."):
-                tp = _save_temp_image(image, '.jpg')
+                tp = _save_temp_image(image, ".jpg")
                 try:
                     results = det(tp, conf=conf_threshold, verbose=False)
                     ri = cv2.imread(tp)
-                    counts = {0:0, 1:0, 2:0}
+                    counts = {0: 0, 1: 0, 2: 0}
                     if results[0].boxes is not None:
                         mask_texts = []
                         for box in results[0].boxes:
-                            x1,y1,x2,y2 = map(int, box.xyxy[0])
-                            c = float(box.conf[0]); cls = int(box.cls[0])
-                            info = MASK_CLASSES.get(cls, {"name":"?","color":(128,128,128)})
-                            cv2.rectangle(ri, (x1,y1), (x2,y2), info['color'], 2)
-                            mask_texts.append((f"{info['name']}:{c:.0%}", (x1, max(y1-18,0)), 20, info['color']))
+                            x1, y1, x2, y2 = map(int, box.xyxy[0])
+                            c = float(box.conf[0])
+                            cls = int(box.cls[0])
+                            info = MASK_CLASSES.get(cls, {"name": "?", "color": (128, 128, 128)})
+                            cv2.rectangle(ri, (x1, y1), (x2, y2), info["color"], 2)
+                            mask_texts.append((f"{info['name']}:{c:.0%}", (x1, max(y1 - 18, 0)), 20, info["color"]))
                             counts[cls] = counts.get(cls, 0) + 1
                         ri = batch_draw_texts(ri, mask_texts)
                     ri = cv2.cvtColor(ri, cv2.COLOR_BGR2RGB)
                 finally:
                     _safe_unlink(tp)
-            with c2: st.markdown("结果"); st.image(ri, width='stretch')
+            with c2:
+                st.markdown("结果")
+                st.image(ri, width="stretch")
             total = sum(counts.values())
-            c1,c2,c3,c4 = st.columns(4)
-            with c1: st.metric("总人数", total)
-            with c2: st.metric("正确佩戴", counts[0])
-            with c3: st.metric("不规范", counts[1])
-            with c4: st.metric("未佩戴", counts[2])
-            if total > 0: st.progress(counts[0]/total, text=f"合规率: {counts[0]/total:.0%}")
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                st.metric("总人数", total)
+            with c2:
+                st.metric("正确佩戴", counts[0])
+            with c3:
+                st.metric("不规范", counts[1])
+            with c4:
+                st.metric("未佩戴", counts[2])
+            if total > 0:
+                st.progress(counts[0] / total, text=f"合规率: {counts[0] / total:.0%}")
 
 
 # ==================== 模型训练 ====================
+
 
 def show_training():
     st.markdown("## 🧠 模型训练")
@@ -1068,47 +1313,70 @@ def show_training():
     st.markdown("### 📁 数据集")
     c1, c2 = st.columns(2)
     with c1:
-        dataset_source = st.selectbox("数据集来源", [
-            "COCO128 (本地)", "COCO128 (下载)", "VOC2012 (下载)", "自定义URL"
-        ], key="ds_source")
+        dataset_source = st.selectbox(
+            "数据集来源", ["COCO128 (本地)", "COCO128 (下载)", "VOC2012 (下载)", "自定义URL"], key="ds_source"
+        )
     with c2:
-        train_model = st.selectbox("预训练模型", [
-            "yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt"
-        ], index=2, key="train_model")
+        train_model = st.selectbox(
+            "预训练模型",
+            ["yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt"],
+            index=2,
+            key="train_model",
+        )
 
     # 自定义URL输入
     custom_url = ""
     if dataset_source == "自定义URL":
-        custom_url = st.text_input("数据集URL", placeholder="https://example.com/dataset.zip", key="ds_url",
-                                   help="支持 .zip 格式，目录结构须为 YOLO 格式 (images/train, labels/train)")
+        custom_url = st.text_input(
+            "数据集URL",
+            placeholder="https://example.com/dataset.zip",
+            key="ds_url",
+            help="支持 .zip 格式，目录结构须为 YOLO 格式 (images/train, labels/train)",
+        )
 
     # 训练参数
     st.markdown("### ⚙️ 训练参数")
     c1, c2, c3, c4 = st.columns(4)
-    with c1: epochs = st.slider("训练轮数", 10, 300, 50, key="epochs")
-    with c2: imgsz = st.selectbox("图片尺寸", [320, 416, 640], index=2, key="imgsz")
-    with c3: batch = st.selectbox("批次大小", [4, 8, 16, 32], index=1, key="batch")
-    with c4: lr = st.number_input("学习率", 0.0001, 0.1, 0.01, format="%.4f", key="lr")
+    with c1:
+        epochs = st.slider("训练轮数", 10, 300, 50, key="epochs")
+    with c2:
+        imgsz = st.selectbox("图片尺寸", [320, 416, 640], index=2, key="imgsz")
+    with c3:
+        batch = st.selectbox("批次大小", [4, 8, 16, 32], index=1, key="batch")
+    with c4:
+        lr = st.number_input("学习率", 0.0001, 0.1, 0.01, format="%.4f", key="lr")
 
     c1, c2, c3 = st.columns(3)
-    with c1: device = st.selectbox("设备", ["自动", "CPU", "GPU"], key="device")
-    with c2: patience = st.slider("早停耐心值", 10, 100, 30, key="patience")
-    with c3: workers = st.slider("线程数", 0, 8, 4, key="workers")
+    with c1:
+        device = st.selectbox("设备", ["自动", "CPU", "GPU"], key="device")
+    with c2:
+        patience = st.slider("早停耐心值", 10, 100, 30, key="patience")
+    with c3:
+        workers = st.slider("线程数", 0, 8, 4, key="workers")
 
     # 自定义类别
     st.markdown("### 🏷️ 类别 (可选)")
-    custom_classes = st.text_input("自定义类别名", placeholder="person,car,dog", key="custom_classes",
-                                   help="留空则使用数据集默认类别，多个类别用逗号分隔")
+    custom_classes = st.text_input(
+        "自定义类别名",
+        placeholder="person,car,dog",
+        key="custom_classes",
+        help="留空则使用数据集默认类别，多个类别用逗号分隔",
+    )
 
     # 训练按钮
     st.markdown("---")
-    if st.button("🚀 开始训练", type="primary", width='stretch'):
-        run_training(dataset_source, custom_url, train_model, epochs, imgsz, batch, lr, device, patience, workers, custom_classes)
+    if st.button("🚀 开始训练", type="primary", width="stretch"):
+        run_training(
+            dataset_source, custom_url, train_model, epochs, imgsz, batch, lr, device, patience, workers, custom_classes
+        )
 
 
-def run_training(dataset_source, custom_url, train_model, epochs, imgsz, batch, lr, device, patience, workers, custom_classes):
-    """执行训练流程"""
-    import subprocess, shutil
+def run_training(
+    dataset_source, custom_url, train_model, epochs, imgsz, batch, lr, device, patience, workers, custom_classes
+):
+    """执行训练流程."""
+    import shutil
+    import subprocess
 
     data_dir = Path("data/datasets")
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -1118,7 +1386,8 @@ def run_training(dataset_source, custom_url, train_model, epochs, imgsz, batch, 
         if dataset_source == "COCO128 (本地)":
             ds_path = data_dir / "coco128"
             if not ds_path.exists():
-                st.error("❌ 本地 COCO128 不存在，请选择下载"); return
+                st.error("❌ 本地 COCO128 不存在，请选择下载")
+                return
             st.write("✅ 使用本地 COCO128 数据集")
             data_yaml = Path("configs/coco128.yaml")
 
@@ -1126,7 +1395,10 @@ def run_training(dataset_source, custom_url, train_model, epochs, imgsz, batch, 
             ds_path = data_dir / "coco128"
             if not ds_path.exists():
                 st.write("⏳ 正在下载 COCO128...")
-                import urllib.request, zipfile, io
+                import io
+                import urllib.request
+                import zipfile
+
                 url = "https://github.com/ultralytics/assets/releases/download/v0.0.0/coco128.zip"
                 try:
                     resp = urllib.request.urlopen(url)
@@ -1134,7 +1406,8 @@ def run_training(dataset_source, custom_url, train_model, epochs, imgsz, batch, 
                     z.extractall(data_dir)
                     st.write("✅ COCO128 下载完成")
                 except Exception as e:
-                    st.error(f"❌ 下载失败: {e}"); return
+                    st.error(f"❌ 下载失败: {e}")
+                    return
             else:
                 st.write("✅ COCO128 已存在，跳过下载")
             data_yaml = Path("configs/coco128.yaml")
@@ -1145,18 +1418,40 @@ def run_training(dataset_source, custom_url, train_model, epochs, imgsz, batch, 
                 st.write("⏳ 正在下载 VOC2012...")
                 try:
                     from ultralytics.utils.downloads import download
-                    download(f"https://github.com/ultralytics/assets/releases/download/v0.0.0/VOC2012.zip", dir=data_dir)
+
+                    download("https://github.com/ultralytics/assets/releases/download/v0.0.0/VOC2012.zip", dir=data_dir)
                     st.write("✅ VOC2012 下载完成")
                 except Exception as e:
-                    st.error(f"❌ 下载失败: {e}"); return
+                    st.error(f"❌ 下载失败: {e}")
+                    return
             else:
                 st.write("✅ VOC2012 已存在，跳过下载")
             # 创建 VOC yaml
             voc_yaml = Path("configs/voc2012.yaml")
             voc_yaml.parent.mkdir(parents=True, exist_ok=True)
-            voc_classes = ["aeroplane","bicycle","bird","boat","bottle","bus","car","cat","chair","cow",
-                           "diningtable","dog","horse","motorbike","person","pottedplant","sheep","sofa","train","tvmonitor"]
-            with open(voc_yaml, 'w') as f:
+            voc_classes = [
+                "aeroplane",
+                "bicycle",
+                "bird",
+                "boat",
+                "bottle",
+                "bus",
+                "car",
+                "cat",
+                "chair",
+                "cow",
+                "diningtable",
+                "dog",
+                "horse",
+                "motorbike",
+                "person",
+                "pottedplant",
+                "sheep",
+                "sofa",
+                "train",
+                "tvmonitor",
+            ]
+            with open(voc_yaml, "w") as f:
                 yaml_content = f"path: {ds_path.absolute()}\ntrain: images/train\nval: images/val\nnames:\n"
                 for i, name in enumerate(voc_classes):
                     yaml_content += f"  {i}: {name}\n"
@@ -1165,19 +1460,24 @@ def run_training(dataset_source, custom_url, train_model, epochs, imgsz, batch, 
 
         elif dataset_source == "自定义URL":
             if not custom_url:
-                st.error("❌ 请输入数据集URL"); return
-            ds_name = "custom_" + custom_url.split("/")[-1].replace(".zip","")
+                st.error("❌ 请输入数据集URL")
+                return
+            ds_name = "custom_" + custom_url.split("/")[-1].replace(".zip", "")
             ds_path = data_dir / ds_name
             if not ds_path.exists():
                 st.write(f"⏳ 正在下载 {custom_url}...")
                 try:
-                    import urllib.request, zipfile, io
+                    import io
+                    import urllib.request
+                    import zipfile
+
                     resp = urllib.request.urlopen(custom_url)
                     z = zipfile.ZipFile(io.BytesIO(resp.read()))
                     z.extractall(ds_path)
                     st.write("✅ 下载完成")
                 except Exception as e:
-                    st.error(f"❌ 下载失败: {e}"); return
+                    st.error(f"❌ 下载失败: {e}")
+                    return
             else:
                 st.write("✅ 数据集已存在，跳过下载")
             # 创建自定义 yaml
@@ -1197,7 +1497,7 @@ def run_training(dataset_source, custom_url, train_model, epochs, imgsz, batch, 
                     classes = [f"class_{i}" for i in range(max_cls)]
                 else:
                     classes = ["object"]
-            with open(custom_yaml, 'w') as f:
+            with open(custom_yaml, "w") as f:
                 content = f"path: {ds_path.absolute()}\ntrain: images/train\nval: images/val\nnames:\n"
                 for i, name in enumerate(classes):
                     content += f"  {i}: {name}\n"
@@ -1214,23 +1514,33 @@ def run_training(dataset_source, custom_url, train_model, epochs, imgsz, batch, 
 
     device_arg = "" if device == "自动" else ("cpu" if device == "CPU" else "0")
     cmd = [
-        _sys.executable, "train.py",
-        "--data", str(data_yaml),
-        "--model", train_model,
-        "--epochs", str(epochs),
-        "--imgsz", str(imgsz),
-        "--batch", str(batch),
-        "--lr", str(lr),
-        "--patience", str(patience),
-        "--workers", str(workers),
+        _sys.executable,
+        "train.py",
+        "--data",
+        str(data_yaml),
+        "--model",
+        train_model,
+        "--epochs",
+        str(epochs),
+        "--imgsz",
+        str(imgsz),
+        "--batch",
+        str(batch),
+        "--lr",
+        str(lr),
+        "--patience",
+        str(patience),
+        "--workers",
+        str(workers),
     ]
     if device_arg:
         cmd.extend(["--device", device_arg])
 
     with st.status("🏋️ 训练中...", expanded=True) as status:
         st.write(f"命令: `{' '.join(cmd)}`")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
-                                   cwd=str(Path(__file__).parent))
+        process = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, cwd=str(Path(__file__).parent)
+        )
         current_epoch = 0
         for line in process.stdout:
             line = line.rstrip()
@@ -1252,7 +1562,8 @@ def run_training(dataset_source, custom_url, train_model, epochs, imgsz, batch, 
             status.update(label="✅ 训练完成!", state="complete")
         else:
             status.update(label="❌ 训练失败", state="error")
-            st.error("训练出错，请检查日志"); return
+            st.error("训练出错，请检查日志")
+            return
 
     # 3. 显示结果
     best_model = Path("runs/train/custom_detect/weights/best.pt")
@@ -1283,6 +1594,7 @@ def run_training(dataset_source, custom_url, train_model, epochs, imgsz, batch, 
 
 # ==================== 关于 ====================
 
+
 def show_about():
     st.markdown("## ℹ️ 关于本项目")
     st.markdown("""
@@ -1298,6 +1610,5 @@ def show_about():
     """)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-

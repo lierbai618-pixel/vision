@@ -26,14 +26,14 @@ uvicorn api:app --reload
 from src.detector import ObjectDetector
 
 # 创建检测器
-detector = ObjectDetector(model_path='yolov8n.pt')
+detector = ObjectDetector(model_path="yolov8n.pt")
 
 # 检测图片
-results = detector.detect_image('image.jpg')
+results = detector.detect_image("image.jpg")
 print(f"检测到 {results['count']} 个物体")
 
 # 检测视频
-detector.detect_video('video.mp4', 'output.mp4')
+detector.detect_video("video.mp4", "output.mp4")
 
 # 实时检测
 detector.detect_camera(camera_id=0)
@@ -48,11 +48,11 @@ from src.face_detector import FaceDetector
 detector = FaceDetector()
 
 # 检测人脸
-results = detector.detect_faces('photo.jpg')
+results = detector.detect_faces("photo.jpg")
 print(f"检测到 {results['face_count']} 张人脸")
 
 # 绘制结果
-detector.draw_faces('photo.jpg', 'result.jpg')
+detector.draw_faces("photo.jpg", "result.jpg")
 ```
 
 ### 车牌识别
@@ -64,12 +64,12 @@ from src.plate_recognizer import LicensePlateRecognizer
 recognizer = LicensePlateRecognizer()
 
 # 检测车牌
-results = recognizer.detect_plate('car.jpg')
+results = recognizer.detect_plate("car.jpg")
 print(f"检测到 {results['plate_count']} 个车牌")
 
 # 识别车牌号码
-results = recognizer.recognize_plate('car.jpg')
-for plate in results['plates']:
+results = recognizer.recognize_plate("car.jpg")
+for plate in results["plates"]:
     print(f"车牌号码: {plate['text']}")
 ```
 
@@ -82,10 +82,10 @@ from src.gesture_recognizer import GestureRecognizer
 recognizer = GestureRecognizer()
 
 # 识别手势
-results = recognizer.recognize_gesture('hand.jpg')
+results = recognizer.recognize_gesture("hand.jpg")
 print(f"检测到 {results['hand_count']} 只手")
 
-for gesture in results['gestures']:
+for gesture in results["gestures"]:
     print(f"手势: {gesture['gesture']}")
 ```
 
@@ -98,15 +98,11 @@ from src.batch_processor import BatchProcessor
 processor = BatchProcessor()
 
 # 批量检测
-results = processor.batch_detect_images(
-    'input_folder',
-    'output_folder',
-    detection_type='object'
-)
+results = processor.batch_detect_images("input_folder", "output_folder", detection_type="object")
 
 # 导出结果
-processor.export_results_to_json(results, 'results.json')
-processor.export_results_to_csv(results, 'results.csv')
+processor.export_results_to_json(results, "results.json")
+processor.export_results_to_csv(results, "results.csv")
 ```
 
 ## 数据可视化
@@ -131,7 +127,7 @@ from src.report_generator import ReportGenerator
 generator = ReportGenerator()
 
 # 生成HTML报告
-html_path = generator.generate_html_report(results, '检测报告')
+html_path = generator.generate_html_report(results, "检测报告")
 
 # 生成CSV报告
 csv_path = generator.generate_csv_report(results)
@@ -146,22 +142,15 @@ json_path = generator.generate_json_report(results)
 from src.trainer import ModelTrainer
 
 # 创建训练器
-trainer = ModelTrainer('yolov8n.pt')
+trainer = ModelTrainer("yolov8n.pt")
 
 # 创建数据集配置
 config_path = trainer.create_dataset_config(
-    'data/custom_dataset',
-    ['person', 'car', 'dog'],
-    'configs/custom_dataset.yaml'
+    "data/custom_dataset", ["person", "car", "dog"], "configs/custom_dataset.yaml"
 )
 
 # 训练模型
-results = trainer.train(
-    data_path=config_path,
-    epochs=100,
-    img_size=640,
-    batch_size=16
-)
+results = trainer.train(data_path=config_path, epochs=100, img_size=640, batch_size=16)
 ```
 
 ## 视频处理
@@ -173,11 +162,7 @@ from src.video_processor import VideoProcessor
 processor = VideoProcessor()
 
 # 处理视频
-stats = processor.process_video(
-    'input.mp4',
-    'output.mp4',
-    detection_type='object'
-)
+stats = processor.process_video("input.mp4", "output.mp4", detection_type="object")
 ```
 
 ## 配置管理
@@ -186,7 +171,7 @@ stats = processor.process_video(
 from src.config import ConfigManager
 
 # 创建配置管理器
-manager = ConfigManager('config.yaml')
+manager = ConfigManager("config.yaml")
 
 # 加载配置
 config = manager.load()
@@ -196,8 +181,8 @@ model_path = config.model.detection_model
 api_port = config.api.port
 
 # 设置配置值
-manager.set('model.detection_model', 'yolov8s.pt')
-manager.set('api.port', 8001)
+manager.set("model.detection_model", "yolov8s.pt")
+manager.set("api.port", 8001)
 
 # 保存配置
 manager.save()
