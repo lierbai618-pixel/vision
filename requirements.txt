@@ -1,7 +1,7 @@
 # 智能视觉系统依赖包
 
 streamlit==1.41.1
-ultralytics==8.3.78
+ultralytics==8.4.83
 opencv-python-headless==4.10.0.84
 mediapipe==0.10.18
 Pillow==11.0.0
