@@ -1,6 +1,7 @@
 # 自定义物品数据集使用说明
 
 ## 数据集结构
+
 ```
 data/custom_items/
 ├── images/
@@ -31,11 +32,13 @@ data/custom_items/
    ```
    class_id center_x center_y width height
    ```
+
    - class_id: 类别编号（0-9）
    - center_x, center_y: 中心点坐标（归一化 0-1）
    - width, height: 宽高（归一化 0-1）
 
 ## 类别列表
+
 - 0: eraser (橡皮)
 - 1: fan (风扇)
 - 2: headphones (耳机)
@@ -48,6 +51,7 @@ data/custom_items/
 - 9: stapler (订书机)
 
 ## 训练命令
+
 ```bash
 python train_custom_items.py --train
 ```

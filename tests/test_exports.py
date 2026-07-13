@@ -12,8 +12,6 @@ from pathlib import Path
 
 import pytest
 import torch
-
-from tests import SOURCE
 from ultralytics import YOLO
 from ultralytics.cfg import TASK2DATA, TASK2MODEL, TASKS
 from ultralytics.engine.exporter import EXPORT_ENVS, export_formats
@@ -39,6 +37,8 @@ from ultralytics.utils.torch_utils import (
     TORCH_2_9,
     TORCH_2_12,
 )
+
+from tests import SOURCE
 
 
 def skip_rpi_semantic(task):

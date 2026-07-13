@@ -9,7 +9,7 @@
     </size>
     <segmented>0</segmented>
     <object>
-        <name>licence</name>
+        <name>license</name>
         <pose>Unspecified</pose>
         <truncated>0</truncated>
         <occluded>0</occluded>
@@ -22,7 +22,7 @@
         </bndbox>
     </object>
     <object>
-        <name>licence</name>
+        <name>license</name>
         <pose>Unspecified</pose>
         <truncated>0</truncated>
         <occluded>0</occluded>
@@ -35,7 +35,7 @@
         </bndbox>
     </object>
     <object>
-        <name>licence</name>
+        <name>license</name>
         <pose>Unspecified</pose>
         <truncated>0</truncated>
         <occluded>0</occluded>
@@ -48,7 +48,7 @@
         </bndbox>
     </object>
     <object>
-        <name>licence</name>
+        <name>license</name>
         <pose>Unspecified</pose>
         <truncated>0</truncated>
         <occluded>0</occluded>
@@ -61,7 +61,7 @@
         </bndbox>
     </object>
     <object>
-        <name>licence</name>
+        <name>license</name>
         <pose>Unspecified</pose>
         <truncated>0</truncated>
         <occluded>0</occluded>
@@ -74,7 +74,7 @@
         </bndbox>
     </object>
     <object>
-        <name>licence</name>
+        <name>license</name>
         <pose>Unspecified</pose>
         <truncated>0</truncated>
         <occluded>0</occluded>

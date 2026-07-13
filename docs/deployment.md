@@ -15,9 +15,9 @@ cd vision-system
 
 # 创建虚拟环境
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
+source venv/bin/activate # Linux/Mac
 # 或
-venv\Scripts\activate  # Windows
+venv\Scripts\activate # Windows
 
 # 安装依赖
 pip install -r requirements.txt
@@ -29,16 +29,16 @@ pip install -r requirements.txt
 
 ```yaml
 model:
-  detection_model: 'yolov8n.pt'
-  face_confidence: 0.5
+    detection_model: "yolov8n.pt"
+    face_confidence: 0.5
 
 api:
-  host: '0.0.0.0'
-  port: 8000
+    host: "0.0.0.0"
+    port: 8000
 
 web:
-  host: '0.0.0.0'
-  port: 8501
+    host: "0.0.0.0"
+    port: 8501
 ```
 
 ### 3. 启动服务
@@ -213,9 +213,9 @@ server {
 ```yaml
 # prometheus.yml
 scrape_configs:
-  - job_name: 'vision-system'
-    static_configs:
-      - targets: ['localhost:8000']
+    - job_name: "vision-system"
+      static_configs:
+          - targets: ["localhost:8000"]
 ```
 
 ### 2. 使用Grafana
@@ -234,7 +234,10 @@ docker run -d \
 
 ```bash
 # 安装NVIDIA Container Toolkit
-distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+distribution=$(
+  . /etc/os-release
+  echo $ID$VERSION_ID
+)
 curl -s -L https://nvidia.github.io/libnvidia-container/gpgkey | sudo apt-key add -
 curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
 
@@ -253,10 +256,10 @@ docker run --gpus all -p 8000:8000 vision-system
 ```yaml
 # config.yaml
 model:
-  detection_model: 'yolov8n.pt'  # 使用更小的模型
+    detection_model: "yolov8n.pt" # 使用更小的模型
 
 api:
-  workers: 2  # 减少worker数量
+    workers: 2 # 减少worker数量
 ```
 
 ## 故障排除

@@ -7,7 +7,6 @@ from typing import Any
 
 import cv2.dnn
 import numpy as np
-
 from ultralytics.utils import ASSETS, ROOT, YAML
 
 CLASSES = YAML.load(ROOT / "cfg/datasets/coco8.yaml")["names"]
