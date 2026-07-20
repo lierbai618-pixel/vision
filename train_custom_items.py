@@ -1,6 +1,5 @@
-﻿# -*- coding: utf-8 -*-
 """
-自定义物品检测数据集构建 & 训练脚本
+自定义物品检测数据集构建 & 训练脚本.
 
 针对小物品（橡皮、风扇、耳机等）优化
 自动下载示例图片并创建 YOLO 格式标签
@@ -11,29 +10,26 @@
   python train_custom_items.py --all               # 创建数据集 + 训练
 """
 
+import argparse
 import os
 import sys
-import argparse
-import shutil
-import json
 from pathlib import Path
-import random
 
 os.chdir(Path(__file__).parent)
-sys.path.insert(0, '.')
+sys.path.insert(0, ".")
 
 # ==================== 自定义类别 ====================
 CUSTOM_CLASSES = {
-    0: "eraser",           # 橡皮
-    1: "fan",              # 风扇
-    2: "headphones",       # 耳机
-    3: "pen",              # 笔
-    4: "pencil",           # 铅笔
-    5: "scissors",         # 剪刀
-    6: "tape",             # 胶带
-    7: "ruler",            # 尺子
-    8: "calculator",       # 计算器
-    9: "stapler",          # 订书机
+    0: "eraser",  # 橡皮
+    1: "fan",  # 风扇
+    2: "headphones",  # 耳机
+    3: "pen",  # 笔
+    4: "pencil",  # 铅笔
+    5: "scissors",  # 剪刀
+    6: "tape",  # 胶带
+    7: "ruler",  # 尺子
+    8: "calculator",  # 计算器
+    9: "stapler",  # 订书机
 }
 
 # 类别中文名
@@ -52,7 +48,7 @@ CLASS_NAMES_CN = {
 
 
 def create_dataset_structure():
-    """创建数据集目录结构"""
+    """创建数据集目录结构."""
     base = Path("data/custom_items")
     for split in ["train", "val"]:
         (base / "images" / split).mkdir(parents=True, exist_ok=True)
@@ -61,13 +57,11 @@ def create_dataset_structure():
 
 
 def create_sample_labels(base_path):
+    """创建示例标签文件 注意：这只是框架，你需要用自己的图片替换.
     """
-    创建示例标签文件
-    注意：这只是框架，你需要用自己的图片替换
-    """
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("  自定义物品数据集 - 创建示例")
-    print("="*60)
+    print("=" * 60)
 
     # 创建数据集配置
     config = f"""# 自定义物品检测数据集
@@ -83,11 +77,11 @@ names:
         config += f"  {idx}: {name}\n"
 
     config_path = Path("configs/custom_items.yaml")
-    config_path.write_text(config, encoding='utf-8')
+    config_path.write_text(config, encoding="utf-8")
     print(f"\n[1/3] 配置文件已创建: {config_path}")
 
     # 创建示例标签（YOLO格式：class_id center_x center_y width height）
-    print(f"\n[2/3] 创建示例标签文件...")
+    print("\n[2/3] 创建示例标签文件...")
 
     # 为每个类别创建示例标签
     for class_id, class_name in CUSTOM_CLASSES.items():
@@ -95,17 +89,11 @@ names:
         for i in range(3):
             label_path = base_path / "labels" / "train" / f"{class_name}_{i}.txt"
             # 创建一个简单的示例标签（需要替换为真实标注）
-            label_path.write_text(
-                f"{class_id} 0.5 0.5 0.3 0.3\n",
-                encoding='utf-8'
-            )
+            label_path.write_text(f"{class_id} 0.5 0.5 0.3 0.3\n", encoding="utf-8")
 
         # 验证集示例标签
         label_path = base_path / "labels" / "val" / f"{class_name}_val.txt"
-        label_path.write_text(
-            f"{class_id} 0.5 0.5 0.3 0.3\n",
-            encoding='utf-8'
-        )
+        label_path.write_text(f"{class_id} 0.5 0.5 0.3 0.3\n", encoding="utf-8")
 
     print(f"  - 创建了 {len(CUSTOM_CLASSES)} 个类别的示例标签")
     print(f"  - 训练集: {base_path / 'labels' / 'train'}")
@@ -162,12 +150,12 @@ python train_custom_items.py --train
 ```
 """
     readme_path = base_path / "README.md"
-    readme_path.write_text(readme, encoding='utf-8')
+    readme_path.write_text(readme, encoding="utf-8")
     print(f"\n[3/3] 使用说明已创建: {readme_path}")
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("  下一步操作：")
-    print("="*60)
+    print("=" * 60)
     print("""
 1. 按照说明收集并标注图片
 2. 将图片放入 data/custom_items/images/ 目录
@@ -181,19 +169,19 @@ python train_custom_items.py --train
 
 
 def train_model(args):
-    """训练自定义物品检测模型"""
+    """训练自定义物品检测模型."""
     from ultralytics import YOLO
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("  自定义物品检测模型训练")
-    print("="*60)
+    print("=" * 60)
 
     # 检查数据集
     base = Path("data/custom_items")
     train_images = list((base / "images" / "train").glob("*.*"))
     val_images = list((base / "images" / "val").glob("*.*"))
 
-    print(f"\n数据集统计:")
+    print("\n数据集统计:")
     print(f"  - 训练图片: {len(train_images)} 张")
     print(f"  - 验证图片: {len(val_images)} 张")
 
@@ -208,12 +196,12 @@ def train_model(args):
     model = YOLO(model_path)
 
     # 开始训练
-    print(f"\n[2/3] 开始训练...")
+    print("\n[2/3] 开始训练...")
     print(f"  - 轮数: {args.epochs}")
     print(f"  - 批次: {args.batch}")
     print(f"  - 图片尺寸: {args.imgsz}")
 
-    results = model.train(
+    model.train(
         data="configs/custom_items.yaml",
         epochs=args.epochs,
         imgsz=args.imgsz,
@@ -238,34 +226,25 @@ def train_model(args):
 
     # 完成
     best_model = Path("runs/train/custom_items/weights/best.pt")
-    print(f"\n[3/3] 训练完成!")
+    print("\n[3/3] 训练完成!")
     print(f"  - 最佳模型: {best_model}")
-    print(f"\n复制模型到项目中:")
+    print("\n复制模型到项目中:")
     print(f'  copy "{best_model}" "models/yolov8_custom_items.pt"')
 
     return str(best_model)
 
 
 def main():
-    parser = argparse.ArgumentParser(description='自定义物品检测训练')
-    parser.add_argument('--create-samples', action='store_true',
-                        help='创建示例数据集结构')
-    parser.add_argument('--train', action='store_true',
-                        help='训练模型')
-    parser.add_argument('--all', action='store_true',
-                        help='创建数据集 + 训练')
-    parser.add_argument('--model', type=str, default='yolov8m.pt',
-                        help='预训练模型 (默认: yolov8m.pt)')
-    parser.add_argument('--epochs', type=int, default=30,
-                        help='训练轮数 (默认: 30)')
-    parser.add_argument('--imgsz', type=int, default=640,
-                        help='图片尺寸 (默认: 640)')
-    parser.add_argument('--batch', type=int, default=8,
-                        help='批次大小 (默认: 8)')
-    parser.add_argument('--device', type=str, default='',
-                        help='设备: 空=自动, cpu=CPU, 0=GPU')
-    parser.add_argument('--patience', type=int, default=20,
-                        help='早停耐心值 (默认: 20)')
+    parser = argparse.ArgumentParser(description="自定义物品检测训练")
+    parser.add_argument("--create-samples", action="store_true", help="创建示例数据集结构")
+    parser.add_argument("--train", action="store_true", help="训练模型")
+    parser.add_argument("--all", action="store_true", help="创建数据集 + 训练")
+    parser.add_argument("--model", type=str, default="yolov8m.pt", help="预训练模型 (默认: yolov8m.pt)")
+    parser.add_argument("--epochs", type=int, default=30, help="训练轮数 (默认: 30)")
+    parser.add_argument("--imgsz", type=int, default=640, help="图片尺寸 (默认: 640)")
+    parser.add_argument("--batch", type=int, default=8, help="批次大小 (默认: 8)")
+    parser.add_argument("--device", type=str, default="", help="设备: 空=自动, cpu=CPU, 0=GPU")
+    parser.add_argument("--patience", type=int, default=20, help="早停耐心值 (默认: 20)")
 
     args = parser.parse_args()
 
@@ -280,5 +259,5 @@ def main():
         parser.print_help()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

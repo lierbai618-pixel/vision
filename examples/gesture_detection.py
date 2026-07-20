@@ -1,5 +1,5 @@
 """
-手势识别示例
+手势识别示例.
 
 使用Kaggle数据集进行手势识别
 """
@@ -11,13 +11,12 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+
 from src.gesture_recognizer import GestureRecognizer
-import cv2
 
 
 def main():
-    """手势识别示例"""
-
+    """手势识别示例."""
     # 创建识别器
     recognizer = GestureRecognizer()
 
@@ -39,16 +38,16 @@ def main():
 
     # 手势类别名称映射
     gesture_names = {
-        '01': '手掌',
-        '02': 'L形',
-        '03': '拳头',
-        '04': '移动拳头',
-        '05': '拇指',
-        '06': '食指',
-        '07': 'OK手势',
-        '08': '移动手掌',
-        '09': 'C形',
-        '10': '向下指'
+        "01": "手掌",
+        "02": "L形",
+        "03": "拳头",
+        "04": "移动拳头",
+        "05": "拇指",
+        "06": "食指",
+        "07": "OK手势",
+        "08": "移动手掌",
+        "09": "C形",
+        "10": "向下指",
     }
 
     # 显示手势类别
@@ -82,9 +81,9 @@ def main():
                     results = recognizer.detect_hands(str(image_path))
                     print(f"  检测到 {results['hand_count']} 只手")
 
-                    if results['hand_count'] > 0:
-                        for j, hand in enumerate(results['hands']):
-                            print(f"  手 {j+1}: {hand['landmark_count']} 个关键点")
+                    if results["hand_count"] > 0:
+                        for j, hand in enumerate(results["hands"]):
+                            print(f"  手 {j + 1}: {hand['landmark_count']} 个关键点")
                 except Exception as e:
                     print(f"  错误: {e}")
 
@@ -92,5 +91,5 @@ def main():
     print("测试完成!")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
