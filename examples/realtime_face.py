@@ -1,5 +1,5 @@
 """
-实时人脸识别示例
+实时人脸识别示例.
 
 使用摄像头进行实时人脸检测
 """
@@ -11,14 +11,15 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-import cv2
 import time
+
+import cv2
+
 from src.face_detector import FaceDetector
 
 
 def main():
-    """实时人脸识别"""
-
+    """实时人脸识别."""
     # 创建检测器
     detector = FaceDetector(min_detection_confidence=0.5)
 
@@ -39,12 +40,12 @@ def main():
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    print(f"\n摄像头信息:")
+    print("\n摄像头信息:")
     print(f"  分辨率: {width}x{height}")
     print(f"  帧率: {fps} FPS")
 
     # 创建窗口
-    window_name = 'Real-time Face Detection'
+    window_name = "Real-time Face Detection"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
     frame_count = 0
@@ -63,6 +64,7 @@ def main():
 
         # 使用MediaPipe检测
         import mediapipe as mp
+
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
         result = detector.detector.detect(mp_image)
 
@@ -84,29 +86,26 @@ def main():
                 # 绘制置信度
                 confidence = detection.categories[0].score
                 label = f"{confidence:.2%}"
-                cv2.putText(frame, label, (x, y - 10),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
         # 计算FPS
         frame_end = time.time()
         fps = 1.0 / (frame_end - frame_start)
 
         # 显示FPS
-        cv2.putText(frame, f"FPS: {fps:.1f}", (10, 30),
-                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        cv2.putText(frame, f"FPS: {fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
         # 显示人脸数量
-        cv2.putText(frame, f"Faces: {face_count}", (10, 70),
-                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        cv2.putText(frame, f"Faces: {face_count}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
         # 显示帧
         cv2.imshow(window_name, frame)
 
         # 按键处理
         key = cv2.waitKey(1) & 0xFF
-        if key == ord('q'):
+        if key == ord("q"):
             break
-        elif key == ord('s'):
+        elif key == ord("s"):
             # 保存截图
             screenshot_path = f"face_screenshot_{frame_count:06d}.jpg"
             cv2.imwrite(screenshot_path, frame)
@@ -122,11 +121,11 @@ def main():
     total_time = time.time() - start_time
     avg_fps = frame_count / total_time if total_time > 0 else 0
 
-    print(f"\n检测统计:")
+    print("\n检测统计:")
     print(f"  总帧数: {frame_count}")
     print(f"  总时间: {total_time:.2f}秒")
     print(f"  平均FPS: {avg_fps:.2f}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

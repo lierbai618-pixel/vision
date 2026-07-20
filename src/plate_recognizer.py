@@ -1,18 +1,18 @@
 """
-车牌识别模块
+车牌识别模块.
 
 使用 YOLOv8 检测车牌区域，使用 OCR 识别车牌号码
 """
 
-import cv2
-import numpy as np
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Dict, List, Optional
+
+import cv2
 
 
 class LicensePlateRecognizer:
-    """
-    车牌识别器
+    """车牌识别器.
 
     支持车牌检测和号码识别
 
@@ -21,19 +21,18 @@ class LicensePlateRecognizer:
         model: YOLOv8 检测模型
     """
 
-    def __init__(self, ocr_languages: Optional[List[str]] = None):
-        """
-        初始化车牌识别器
+    def __init__(self, ocr_languages: list[str] | None = None):
+        """初始化车牌识别器.
 
         Args:
             ocr_languages: OCR 语言列表，如 ['en', 'ch_sim']
         """
-        self.ocr_languages = ocr_languages or ['en']
+        self.ocr_languages = ocr_languages or ["en"]
         self.model = None
         self._ocr_reader = None
 
     def _load_model(self):
-        """懒加载检测模型"""
+        """懒加载检测模型."""
         if self.model is not None:
             return
 
@@ -55,20 +54,20 @@ class LicensePlateRecognizer:
         self.model = YOLO("yolov8n.pt")
 
     def _load_ocr(self):
-        """懒加载 OCR 引擎"""
+        """懒加载 OCR 引擎."""
         if self._ocr_reader is not None:
             return
 
         try:
             import easyocr
+
             self._ocr_reader = easyocr.Reader(self.ocr_languages, gpu=False)
         except ImportError:
             print("警告: easyocr 未安装，车牌号码识别功能不可用")
             self._ocr_reader = None
 
-    def detect_plate(self, image_path: str) -> Dict:
-        """
-        检测图片中的车牌
+    def detect_plate(self, image_path: str) -> dict:
+        """检测图片中的车牌.
 
         Args:
             image_path: 图片路径
@@ -91,20 +90,18 @@ class LicensePlateRecognizer:
             for box in results[0].boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 conf = float(box.conf[0])
-                plates.append({
-                    'bbox': {'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2},
-                    'confidence': conf,
-                    'text': '',
-                })
+                plates.append(
+                    {
+                        "bbox": {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
+                        "confidence": conf,
+                        "text": "",
+                    }
+                )
 
-        return {
-            'plate_count': len(plates),
-            'plates': plates
-        }
+        return {"plate_count": len(plates), "plates": plates}
 
-    def recognize_plate(self, image_path: str) -> Dict:
-        """
-        识别图片中的车牌号码
+    def recognize_plate(self, image_path: str) -> dict:
+        """识别图片中的车牌号码.
 
         Args:
             image_path: 图片路径
@@ -127,9 +124,9 @@ class LicensePlateRecognizer:
             return result
 
         # 对每个检测到的车牌区域进行 OCR
-        for plate in result['plates']:
-            bbox = plate['bbox']
-            roi = image[bbox['y1']:bbox['y2'], bbox['x1']:bbox['x2']]
+        for plate in result["plates"]:
+            bbox = plate["bbox"]
+            roi = image[bbox["y1"] : bbox["y2"], bbox["x1"] : bbox["x2"]]
 
             if roi.size == 0:
                 continue
@@ -139,19 +136,18 @@ class LicensePlateRecognizer:
                 if ocr_results:
                     # 取置信度最高的结果
                     best = max(ocr_results, key=lambda x: x[2])
-                    plate['text'] = best[1]
-                    plate['ocr_confidence'] = float(best[2])
+                    plate["text"] = best[1]
+                    plate["ocr_confidence"] = float(best[2])
             except Exception as e:
-                plate['text'] = ''
-                plate['ocr_error'] = str(e)
+                plate["text"] = ""
+                plate["ocr_error"] = str(e)
 
         return result
 
 
 # 便捷函数
-def recognize_plate_in_image(image_path: str) -> Dict:
-    """
-    快速识别单张图片的车牌
+def recognize_plate_in_image(image_path: str) -> dict:
+    """快速识别单张图片的车牌.
 
     Args:
         image_path: 图片路径
@@ -163,7 +159,7 @@ def recognize_plate_in_image(image_path: str) -> Dict:
     return recognizer.recognize_plate(image_path)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # 测试代码
     print("车牌识别器测试")
     recognizer = LicensePlateRecognizer()
@@ -172,7 +168,7 @@ if __name__ == '__main__':
     try:
         results = recognizer.detect_plate(test_image)
         print(f"检测到 {results['plate_count']} 个车牌")
-        for i, plate in enumerate(results['plates']):
-            print(f"  车牌 {i+1}: 置信度 {plate['confidence']:.2%}")
+        for i, plate in enumerate(results["plates"]):
+            print(f"  车牌 {i + 1}: 置信度 {plate['confidence']:.2%}")
     except Exception as e:
         print(f"测试失败: {e}")
